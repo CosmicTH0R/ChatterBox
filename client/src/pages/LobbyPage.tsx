@@ -1,124 +1,6 @@
-// // src/pages/LobbyPage.js
-// import React, { useEffect, useState } from "react";
-// import axios from "axios";
-// import { Link } from "react-router-dom";
-
-// const LobbyPage = () => {
-//   const [rooms, setRooms] = useState([]);
-//   const [roomName, setRoomName] = useState("");
-//   const [error, setError] = useState("");
-//   const [loading, setLoading] = useState(false);
-
-//   const token = localStorage.getItem("token");
-
-//   // 🔹 Fetch all rooms (Task 18)
-//   const fetchRooms = async () => {
-//     try {
-//       const res = await axios.get("http://localhost:5000/api/rooms", {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       setRooms(res.data);
-//     } catch (err) {
-//       console.error("Error fetching rooms:", err);
-//       setError("Unable to load rooms. Try again later.");
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchRooms();
-//   }, []);
-
-//   // 🔹 Create room (Task 19)
-//   const createRoom = async (e) => {
-//     e.preventDefault();
-//     if (!roomName.trim()) {
-//       setError("Room name cannot be empty.");
-//       return;
-//     }
-//     setLoading(true);
-//     setError("");
-
-//     try {
-//       await axios.post(
-//         "http://localhost:5000/api/rooms",
-//         { name: roomName },
-//         {
-//           headers: {
-//             "Content-Type": "application/json",
-//             Authorization: `Bearer ${token}`,
-//           },
-//         }
-//       );
-//       setRoomName("");
-//       await fetchRooms(); // refresh list
-//     } catch (err) {
-//       console.error("Error creating room:", err);
-//       setError(
-//         err.response?.data?.message || "Failed to create room. Try again."
-//       );
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div style={{ padding: "2rem", maxWidth: "600px", margin: "auto" }}>
-//       <h2>Available Chat Rooms</h2>
-
-//       {/* Create Room Form */}
-//       <form onSubmit={createRoom} style={{ marginBottom: "1rem" }}>
-//         <input
-//           type="text"
-//           placeholder="Enter room name"
-//           value={roomName}
-//           onChange={(e) => setRoomName(e.target.value)}
-//           style={{ padding: "0.5rem", marginRight: "0.5rem" }}
-//         />
-//         <button type="submit" disabled={loading} style={{ padding: "0.5rem" }}>
-//           {loading ? "Creating..." : "Create Room"}
-//         </button>
-//       </form>
-
-//       {error && <p style={{ color: "red" }}>{error}</p>}
-
-//       {/* Display Rooms */}
-//       {rooms.length > 0 ? (
-//         <ul>
-//           {rooms.map((room) => (
-//             <li key={room._id} style={{ margin: "0.5rem 0" }}>
-//               {/* 🔹 Task 20: Link to each room */}
-//               <Link
-//                 to={`/room/${encodeURIComponent(room.name)}`}
-//                 style={{
-//                   color: "blue",
-//                   textDecoration: "none",
-//                   fontWeight: "bold",
-//                 }}
-//               >
-//                 {room.name}
-//               </Link>
-//             </li>
-//           ))}
-//         </ul>
-//       ) : (
-//         <p>No rooms available. Create one above.</p>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default LobbyPage;
-
-
-
-
-
-
-
-
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom"; // <-- Kept original imports
+import { Link, useNavigate } from "react-router-dom";
 import { 
   MessageSquareText, 
   Hash, 
@@ -136,19 +18,21 @@ interface Room {
 }
 
 const LobbyPage: React.FC = () => {
-  // --- START: Original State & Logic ---
-  const [rooms, setRooms] = useState<Room[]>([]); // Added type
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [roomName, setRoomName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const navigate = useNavigate(); // Added for logout
+  const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  // 🔹 Fetch all rooms (Original Functionality)
+  // ✅ Use environment variable for API base URL
+  const API_URL = import.meta.env.VITE_API_URL;
+
+  // 🔹 Fetch all rooms
   const fetchRooms = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/rooms", {
+      const res = await axios.get(`${API_URL}/api/rooms`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRooms(res.data);
@@ -160,14 +44,13 @@ const LobbyPage: React.FC = () => {
 
   useEffect(() => {
     if (!token) {
-      // Redirect to login if no token
       navigate('/login');
     } else {
       fetchRooms();
     }
-  }, [token]); // Added token dependency
+  }, [token]);
 
-  // 🔹 Create room (Original Functionality)
+  // 🔹 Create room
   const createRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roomName.trim()) {
@@ -179,7 +62,7 @@ const LobbyPage: React.FC = () => {
 
     try {
       await axios.post(
-        "http://localhost:5000/api/rooms",
+        `${API_URL}/api/rooms`,
         { name: roomName },
         {
           headers: {
@@ -189,8 +72,8 @@ const LobbyPage: React.FC = () => {
         }
       );
       setRoomName("");
-      await fetchRooms(); // refresh list
-    } catch (err: any) { // Added 'any' type
+      await fetchRooms();
+    } catch (err: any) {
       console.error("Error creating room:", err);
       setError(
         err.response?.data?.message || "Failed to create room. Try again."
@@ -199,7 +82,6 @@ const LobbyPage: React.FC = () => {
       setLoading(false);
     }
   };
-  // --- END: Original State & Logic ---
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -225,11 +107,11 @@ const LobbyPage: React.FC = () => {
 
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full">
           <div className="flex items-center gap-3 mb-6">
-             <Users className="w-8 h-8 text-indigo-600" />
-             <h2 className="text-3xl font-bold text-gray-900">Chat Lobby</h2>
+            <Users className="w-8 h-8 text-indigo-600" />
+            <h2 className="text-3xl font-bold text-gray-900">Chat Lobby</h2>
           </div>
 
-          {/* --- Create Room Form (Uses original createRoom) --- */}
+          {/* --- Create Room Form --- */}
           <form onSubmit={createRoom} className="mb-6">
             <label htmlFor="roomName" className="block text-sm font-semibold text-gray-700 mb-2">
               Create a New Room
@@ -258,17 +140,16 @@ const LobbyPage: React.FC = () => {
             </div>
           </form>
 
-          {/* --- Original Error Display --- */}
+          {/* --- Error Display --- */}
           {error && <p className="text-red-600 text-sm text-center mb-4">{error}</p>}
 
-          {/* --- Display Rooms (Original Logic) --- */}
+          {/* --- Display Rooms --- */}
           <div className="space-y-3">
-             <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Available Rooms</h3>
+            <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">Available Rooms</h3>
             {rooms.length > 0 ? (
               <ul className="divide-y divide-gray-200">
                 {rooms.map((room) => (
                   <li key={room._id} className="py-1">
-                    {/* --- Original Link Component --- */}
                     <Link
                       to={`/room/${encodeURIComponent(room.name)}`}
                       className="flex items-center justify-between p-3 rounded-lg text-indigo-700 hover:bg-indigo-50 transition-colors"
@@ -293,4 +174,3 @@ const LobbyPage: React.FC = () => {
 };
 
 export default LobbyPage;
-

@@ -1,99 +1,48 @@
-// import React, { useState } from "react";
-// import axios from "axios";
-// import { useNavigate } from "react-router-dom";
-
-// const RegisterPage: React.FC = () => {
-//   const [username, setUsername] = useState("");
-//   const [password, setPassword] = useState("");
-//   const navigate = useNavigate();
-
-//   const handleRegister = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     try {
-//       const res = await axios.post("http://localhost:5000/api/auth/register", {
-//         username,
-//         password,
-//       });
-//       alert(res.data.message || "Registration successful!");
-//       navigate("/login");
-//     } catch (err: any) {
-//       alert(err.response?.data?.message || "Registration failed");
-//     }
-//   };
-
-//   return (
-//     <div style={{ textAlign: "center", marginTop: "3rem" }}>
-//       <h2>Register</h2>
-//       <form onSubmit={handleRegister}>
-//         <input
-//           type="text"
-//           placeholder="Username"
-//           value={username}
-//           onChange={(e) => setUsername(e.target.value)}
-//           required
-//         /><br /><br />
-//         <input
-//           type="password"
-//           placeholder="Password"
-//           value={password}
-//           onChange={(e) => setPassword(e.target.value)}
-//           required
-//         /><br /><br />
-//         <button type="submit">Register</button>
-//       </form>
-//     </div>
-//   );
-// };
-
-// export default RegisterPage;
-
-
-
-
-
-
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { toast, Toaster } from "react-hot-toast"; // <-- Import toast
-import { 
-  MessageSquareText, 
-  Lock, 
+import { toast, Toaster } from "react-hot-toast";
+import {
+  MessageSquareText,
+  Lock,
   User,
   Eye,
   EyeOff,
   UserPlus
-} from 'lucide-react';
+} from "lucide-react";
 
 const RegisterPage: React.FC = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // Added for UI
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  // --- START: Original Functionality (with Toasts) ---
+  // ✅ Use environment variable instead of hardcoded URL
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    const loadingToastId = toast.loading('Creating account...'); // <-- Add loading toast
+    const loadingToastId = toast.loading("Creating account...");
 
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/register", {
+      const res = await axios.post(`${API_URL}/api/auth/register`, {
         username,
         password,
       });
-      // alert(res.data.message || "Registration successful!"); // <-- Replaced
-      toast.success(res.data.message || "Registration successful!", { id: loadingToastId }); // <-- with success toast
+      toast.success(res.data.message || "Registration successful!", {
+        id: loadingToastId,
+      });
       navigate("/lobby");
     } catch (err: any) {
-      // alert(err.response?.data?.message || "Registration failed"); // <-- Replaced
-      toast.error(err.response?.data?.message || "Registration failed", { id: loadingToastId }); // <-- with error toast
+      toast.error(err.response?.data?.message || "Registration failed", {
+        id: loadingToastId,
+      });
     }
   };
-  // --- END: Original Functionality (with Toasts) ---
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
-      <Toaster position="top-center" reverseOrder={false} /> {/* <-- Add Toaster component */}
+      <Toaster position="top-center" reverseOrder={false} />
       <div className="max-w-md w-full">
         <div className="flex justify-center items-center space-x-2 mb-8">
           <MessageSquareText className="w-10 h-10 text-indigo-600" />
@@ -101,15 +50,19 @@ const RegisterPage: React.FC = () => {
         </div>
 
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-1">Create Account</h2>
-          <p className="text-gray-600 text-center mb-8">Get started by creating a new account.</p>
+          <h2 className="text-3xl font-bold text-gray-900 text-center mb-1">
+            Create Account
+          </h2>
+          <p className="text-gray-600 text-center mb-8">
+            Get started by creating a new account.
+          </p>
 
-          {/* --- Form uses original handleRegister --- */}
           <form onSubmit={handleRegister} className="space-y-6">
-            
-            {/* --- Username Field (from original code) --- */}
             <div>
-              <label htmlFor="username" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label
+                htmlFor="username"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
                 Username
               </label>
               <div className="relative">
@@ -128,9 +81,11 @@ const RegisterPage: React.FC = () => {
               </div>
             </div>
 
-            {/* --- Password Field (from original code) --- */}
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
                 Password
               </label>
               <div className="relative">
@@ -139,26 +94,28 @@ const RegisterPage: React.FC = () => {
                 </div>
                 <input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
-                {/* --- Added Password Toggle Button --- */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
 
-            {/* --- Submit Button (from original code) --- */}
             <div>
               <button
                 type="submit"
@@ -170,12 +127,11 @@ const RegisterPage: React.FC = () => {
             </div>
           </form>
 
-          {/* --- Navigation to Login (uses navigate) --- */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Already have an account?{' '}
+              Already have an account?{" "}
               <button
-                onClick={() => navigate('/login')} // Uses original navigation
+                onClick={() => navigate("/login")}
                 className="font-semibold text-indigo-600 hover:text-indigo-500"
               >
                 Log In
@@ -189,4 +145,3 @@ const RegisterPage: React.FC = () => {
 };
 
 export default RegisterPage;
-

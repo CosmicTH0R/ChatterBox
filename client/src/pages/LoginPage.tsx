@@ -1,63 +1,7 @@
-// import React, { useState } from "react";
-// import axios from "axios";
-// import { useNavigate } from "react-router-dom";
-
-// const LoginPage: React.FC = () => {
-//   const [username, setUsername] = useState("");
-//   const [password, setPassword] = useState("");
-//   const navigate = useNavigate();
-
-//   const handleLogin = async (e: React.FormEvent) => {
-//     e.preventDefault();
-//     try {
-//       const res = await axios.post("http://localhost:5000/api/auth/login", {
-//         username,
-//         password,
-//       });
-//       const token = res.data.token;
-
-//       // ✅ Save token for future API calls
-//       localStorage.setItem("token", token);
-
-//       alert("Login successful!");
-//       navigate("/lobby");
-//     } catch (err: any) {
-//       alert(err.response?.data?.message || "Invalid credentials");
-//     }
-//   };
-
-//   return (
-//     <div style={{ textAlign: "center", marginTop: "3rem" }}>
-//       <h2>Login</h2>
-//       <form onSubmit={handleLogin}>
-//         <input
-//           type="text"
-//           placeholder="Username"
-//           value={username}
-//           onChange={(e) => setUsername(e.target.value)}
-//           required
-//         /><br /><br />
-//         <input
-//           type="password"
-//           placeholder="Password"
-//           value={password}
-//           onChange={(e) => setPassword(e.target.value)}
-//           required
-//         /><br /><br />
-//         <button type="submit">Login</button>
-//       </form>
-//     </div>
-//   );
-// };
-
-// export default LoginPage;
-
-
-
 import React, { useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom"; // Restored this hook
-import { toast, Toaster } from "react-hot-toast"; // <-- Import toast
+import { useNavigate } from "react-router-dom";
+import { toast, Toaster } from "react-hot-toast";
 import { 
   MessageSquareText, 
   Lock, 
@@ -67,48 +11,39 @@ import {
   LogIn
 } from 'lucide-react';
 
-// --- REMOVED: Prop-based navigation types ---
-// type Page = 'home' | 'login' | 'register' | 'lobby' | 'chatroom';
-// interface LoginPageProps {
-//   setPage: (page: Page) => void;
-// }
-// --- END: Removed Types ---
-
-// --- CHANGED: Component now uses useNavigate ---
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // Added for UI
-  const navigate = useNavigate(); // Restored this hook
+  const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
 
-  // --- START: Original Functionality (Restored) ---
+  // ✅ Use environment variable
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const loadingToastId = toast.loading('Logging in...'); // <-- Add loading toast
+    const loadingToastId = toast.loading('Logging in...');
 
     try {
-      const res = await axios.post("http://localhost:5000/api/auth/login", {
+      // ✅ Dynamic API URL
+      const res = await axios.post(`${API_URL}/api/auth/login`, {
         username,
         password,
       });
-      const token = res.data.token;
 
-      // ✅ Save token for future API calls
+      const token = res.data.token;
       localStorage.setItem("token", token);
 
-      // alert("Login successful!"); // <-- Replaced
-      toast.success("Login successful!", { id: loadingToastId }); // <-- with success toast
-      navigate("/lobby"); // Restored original navigation
-    } catch (err: any) { 
-      // alert(err.response?.data?.message || "Invalid credentials"); // <-- Replaced
-      toast.error(err.response?.data?.message || "Invalid credentials", { id: loadingToastId }); // <-- with error toast
-    } 
+      toast.success("Login successful!", { id: loadingToastId });
+      navigate("/lobby");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Invalid credentials", { id: loadingToastId });
+    }
   };
-  // --- END: Original Functionality (Restored) ---
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
-      <Toaster position="top-center" reverseOrder={false} /> {/* <-- Add Toaster component */}
+      <Toaster position="top-center" reverseOrder={false} />
       <div className="max-w-md w-full">
         <div className="flex justify-center items-center space-x-2 mb-8">
           <MessageSquareText className="w-10 h-10 text-indigo-600" />
@@ -119,10 +54,7 @@ const LoginPage: React.FC = () => {
           <h2 className="text-3xl font-bold text-gray-900 text-center mb-1">Welcome Back!</h2>
           <p className="text-gray-600 text-center mb-8">Please log in to your account.</p>
 
-          {/* --- Form uses original handleLogin --- */}
           <form onSubmit={handleLogin} className="space-y-6">
-            
-            {/* --- Username Field (from original code) --- */}
             <div>
               <label htmlFor="username" className="block text-sm font-semibold text-gray-700 mb-2">
                 Username
@@ -143,7 +75,6 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* --- Password Field (from original code) --- */}
             <div>
               <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
                 Password
@@ -161,7 +92,6 @@ const LoginPage: React.FC = () => {
                   required
                   className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
-                {/* --- Added Password Toggle Button --- */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -173,7 +103,6 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            {/* --- Submit Button (from original code) --- */}
             <div>
               <button
                 type="submit"
@@ -185,12 +114,11 @@ const LoginPage: React.FC = () => {
             </div>
           </form>
 
-          {/* --- Navigation to Register (uses prop) --- */}
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
               Don't have an account?{' '}
               <button
-                onClick={() => navigate('/register')} // Restored original navigation
+                onClick={() => navigate('/register')}
                 className="font-semibold text-indigo-600 hover:text-indigo-500"
               >
                 Sign Up
@@ -204,5 +132,3 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-
-
