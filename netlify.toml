@@ -1,7 +1,4 @@
 [build]
   base = "client"
   publish = "dist"
-  command = "npm run build"
-
-[build.environment]
-  NPM_FLAGS = "--omit=optional"
+  command = "rm -rf node_modules package-lock.json && npm install && npm run build"
