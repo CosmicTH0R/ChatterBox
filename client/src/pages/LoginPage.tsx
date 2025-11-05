@@ -34,6 +34,9 @@ const LoginPage: React.FC = () => {
       const token = res.data.token;
       localStorage.setItem("token", token);
 
+      // ✅ Store username for chat bubble logic
+    localStorage.setItem("username", username);
+
       toast.success("Login successful!", { id: loadingToastId });
       navigate("/lobby");
     } catch (err: any) {
