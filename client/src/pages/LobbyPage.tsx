@@ -284,7 +284,7 @@ const LobbyPage: React.FC = () => {
 
             <div className="flex items-start">
               {/* Icon */}
-              <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+              <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                 <AlertTriangle
                   className="h-6 w-6 text-red-600"
                   aria-hidden="true"
