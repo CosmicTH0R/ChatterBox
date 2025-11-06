@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast, Toaster } from "react-hot-toast";
-import { 
-  MessageSquareText, 
-  Lock, 
+import {
+  MessageSquareText,
+  Lock,
   UserPlus,
   Eye,
   EyeOff,
-  LogIn
-} from 'lucide-react';
+  LogIn,
+} from "lucide-react";
 
 const LoginPage: React.FC = () => {
   const [username, setUsername] = useState("");
@@ -22,7 +22,7 @@ const LoginPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const loadingToastId = toast.loading('Logging in...');
+    const loadingToastId = toast.loading("Logging in...");
 
     try {
       // ✅ Dynamic API URL
@@ -31,16 +31,16 @@ const LoginPage: React.FC = () => {
         password,
       });
 
-      const token = res.data.token;
-      localStorage.setItem("token", token);
-
-      // ✅ Store username for chat bubble logic
-    localStorage.setItem("username", username);
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("username", res.data.username);
+      localStorage.setItem("userId", res.data.userId);
 
       toast.success("Login successful!", { id: loadingToastId });
       navigate("/lobby");
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Invalid credentials", { id: loadingToastId });
+      toast.error(err.response?.data?.message || "Invalid credentials", {
+        id: loadingToastId,
+      });
     }
   };
 
@@ -54,12 +54,19 @@ const LoginPage: React.FC = () => {
         </div>
 
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-1">Welcome Back!</h2>
-          <p className="text-gray-600 text-center mb-8">Please log in to your account.</p>
+          <h2 className="text-3xl font-bold text-gray-900 text-center mb-1">
+            Welcome Back!
+          </h2>
+          <p className="text-gray-600 text-center mb-8">
+            Please log in to your account.
+          </p>
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
-              <label htmlFor="username" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label
+                htmlFor="username"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
                 Username
               </label>
               <div className="relative">
@@ -79,7 +86,10 @@ const LoginPage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
                 Password
               </label>
               <div className="relative">
@@ -88,7 +98,7 @@ const LoginPage: React.FC = () => {
                 </div>
                 <input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -101,7 +111,11 @@ const LoginPage: React.FC = () => {
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
@@ -119,9 +133,9 @@ const LoginPage: React.FC = () => {
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
+              Don't have an account?{" "}
               <button
-                onClick={() => navigate('/register')}
+                onClick={() => navigate("/register")}
                 className="font-semibold text-indigo-600 hover:text-indigo-500"
               >
                 Sign Up

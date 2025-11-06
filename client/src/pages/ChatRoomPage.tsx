@@ -1,18 +1,30 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
-import { ArrowLeft, Send, User, Zap, Users, X } from "lucide-react";
+import axios from "axios"; // Import axios to fetch room details
+import { ArrowLeft, Send, User, Zap, Users, X, Clock } from "lucide-react";
 import { format } from "date-fns";
 
+/*
+ * Matches the populated data from the backend.
+ */
 interface Message {
-  user: string;
+  _id: string | number; // Allow number for temporary pending ID
   text: string;
-  timestamp?: string;
+  timestamp: string;
+  user: {
+    _id: string;
+    username: string;
+  };
+  isPending?: boolean; // For your optimistic UI
 }
 
 const ChatRoomPage: React.FC = () => {
   const navigate = useNavigate();
-  const { roomName } = useParams<{ roomName: string }>();
+  /**
+   * ✅ Task 4: Get roomId from URL params
+   */
+  const { roomId } = useParams<{ roomId: string }>();
 
   const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -20,25 +32,57 @@ const ChatRoomPage: React.FC = () => {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [isUserListOpen, setIsUserListOpen] = useState(false);
+
+  // 🔹 Bonus: Add state to hold the room name
+  const [roomName, setRoomName] = useState("Loading room...");
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-  const currentUser = localStorage.getItem("username");
+  // Resolved build warning by hardcoding fallback
+  const SOCKET_URL = "http://localhost:5000";
+  const API_URL = "http://localhost:5000";
 
-  // Individual timeouts for typing users
- const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const currentUser = localStorage.getItem("username");
+  const token = localStorage.getItem("token");
+
+  const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setText(e.target.value);
+    if (!socket || !currentUser || !roomId) return;
 
-    if (!socket || !currentUser) return;
-
-    socket.emit("typing", { roomName, user: currentUser });
+    /**
+     * ✅ Task 4: Emit 'typing' with roomId
+     */
+    socket.emit("typing", { roomId, user: currentUser });
   };
 
+  // 🔹 Bonus: Fetch room details to get the name
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!roomId || !token) return;
+
+    const fetchRoomDetails = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/rooms/${roomId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setRoomName(res.data.name); // Set the room name from the API
+      } catch (err) {
+        console.error("Error fetching room details:", err);
+        setRoomName("Private Room");
+        // Optionally navigate away if room not found
+        // navigate("/lobby");
+      }
+    };
+    fetchRoomDetails();
+  }, [roomId, token, API_URL, navigate]);
+
+  // Socket connection effect
+  useEffect(() => {
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
     const newSocket = io(SOCKET_URL, {
       transports: ["websocket"],
@@ -46,22 +90,72 @@ const ChatRoomPage: React.FC = () => {
     });
     setSocket(newSocket);
 
-    return () => {newSocket.disconnect()};
-  }, [SOCKET_URL]);
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [SOCKET_URL, token, navigate]);
 
+  // Socket event listeners effect
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !roomId) return; // Must have socket and roomId
 
-    socket.emit("joinRoom", { roomName });
+    /**
+     * ✅ Task 4: Emit 'joinRoom' with roomId
+     */
+    socket.emit("joinRoom", { roomId });
 
-    socket.on("systemMessage", (msg) => {
-      setMessages((prev) => [...prev, { user: "System", text: msg }]);
+    // --- NEW LISTENERS FOR TASK 8 ---
+
+    /**
+     * ✅ Task 8: Listen for 'loadHistory'
+     * Replaces the entire message list with the history.
+     */
+    socket.on("loadHistory", (history: Message[]) => {
+      setMessages(history);
     });
 
-    socket.on("receiveMessage", (msg) => {
-      setMessages((prev) => [...prev, msg]);
-      // Stop typing for current user when they send a message
-      setTypingUsers((prev) => prev.filter((u) => u !== currentUser));
+    /**
+     * ✅ Task 8: Listen for 'receiveMessage'
+     * This now handles your *pending* messages.
+     */
+    socket.on("receiveMessage", (pendingMsg: Message) => {
+      setMessages((prev) => [...prev, pendingMsg]);
+      // Stop typing for *other* users when they send a message
+      if (pendingMsg.user.username !== currentUser) {
+        setTypingUsers((prev) =>
+          prev.filter((u) => u !== pendingMsg.user.username)
+        );
+      }
+    });
+
+    /**
+     * ✅ Bug Fix: Correctly handle the 'messageConfirmed' payload
+     * This replaces the pending message with the real one from the DB.
+     */
+    socket.on(
+      "messageConfirmed",
+      (data: { tempId: string | number; savedMessage: Message }) => {
+        const { tempId, savedMessage } = data;
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            // Find the pending message by its temporary ID and replace it
+            msg._id === tempId ? savedMessage : msg
+          )
+        );
+      }
+    );
+
+    // --- Other listeners ---
+
+    socket.on("systemMessage", (msg) => {
+      const systemMessage: Message = {
+        _id: new Date().getTime(),
+        text: msg,
+        timestamp: new Date().toISOString(),
+        user: { _id: "system", username: "System" },
+      };
+      setMessages((prev) => [...prev, systemMessage]);
     });
 
     socket.on("updateUserList", (userList: string[]) => {
@@ -70,14 +164,9 @@ const ChatRoomPage: React.FC = () => {
 
     socket.on("userTyping", (user: string) => {
       if (!user || user === currentUser) return;
-
-      setTypingUsers((prev) => {
-        if (!prev.includes(user)) return [...prev, user];
-        return prev;
-      });
-
-      if (typingTimeouts.current[user]) clearTimeout(typingTimeouts.current[user]);
-
+      setTypingUsers((prev) => (prev.includes(user) ? prev : [...prev, user]));
+      if (typingTimeouts.current[user])
+        clearTimeout(typingTimeouts.current[user]);
       typingTimeouts.current[user] = setTimeout(() => {
         setTypingUsers((prev) => prev.filter((u) => u !== user));
         delete typingTimeouts.current[user];
@@ -88,23 +177,33 @@ const ChatRoomPage: React.FC = () => {
       console.error("Socket connection error:", err.message);
     });
 
+    // Cleanup all listeners
     return () => {
-      socket.off("systemMessage");
+      socket.off("loadHistory");
       socket.off("receiveMessage");
+      socket.off("messageConfirmed");
+      socket.off("systemMessage");
       socket.off("updateUserList");
       socket.off("userTyping");
       socket.off("connect_error");
     };
-  }, [socket, roomName, currentUser]);
+    /**
+     * ✅ Task 4: Add roomId to dependency array
+     */
+  }, [socket, roomId, currentUser]);
 
+  // Scroll to bottom effect
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !socket) return;
-    socket.emit("sendMessage", { roomName, text });
+    if (!text.trim() || !socket || !roomId) return;
+    /**
+     * ✅ Task 6 & 4: Emit 'sendMessage' with roomId and text
+     */
+    socket.emit("sendMessage", { roomId, text });
     setText("");
     // Stop typing for current user immediately
     setTypingUsers((prev) => prev.filter((u) => u !== currentUser));
@@ -168,6 +267,7 @@ const ChatRoomPage: React.FC = () => {
                 <span className="hidden md:inline md:ml-2">Back to Lobby</span>
               </button>
 
+              {/* 🔹 Bonus: Display fetched roomName */}
               <h2 className="text-xl font-bold text-gray-900">{roomName}</h2>
 
               <button
@@ -179,7 +279,7 @@ const ChatRoomPage: React.FC = () => {
               <div className="hidden md:block w-28"></div>
             </div>
 
-            {/* Typing Indicator (absolute positioning) */}
+            {/* Typing Indicator */}
             {typingUsers.length > 0 && (
               <div className="absolute bottom-0 text-sm text-gray-500 mt-1">
                 {typingUsers.length === 1
@@ -196,26 +296,31 @@ const ChatRoomPage: React.FC = () => {
           {/* Messages */}
           <div className="grow p-4 overflow-y-auto bg-gray-50 flex flex-col">
             <div className="space-y-4 grow">
-              {messages.map((msg, index) => {
-                const isMine = msg.user === currentUser;
+              {/**
+               * ✅ Task 8: Updated Message Rendering
+               */}
+              {messages.map((msg) => {
+                const isMine = msg.user.username === currentUser;
+                const isSystem = msg.user.username === "System";
+
                 return (
                   <div
-                    key={index}
+                    key={msg._id} // Use unique _id for key
                     className={`flex gap-3 mb-2 ${
-                      msg.user === "System"
+                      isSystem
                         ? "justify-center"
                         : isMine
                         ? "justify-end"
                         : "justify-start"
                     }`}
                   >
-                    {!isMine && msg.user !== "System" && (
+                    {!isMine && !isSystem && (
                       <span className="shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-indigo-500 text-white font-semibold">
                         <User className="w-5 h-5" />
                       </span>
                     )}
 
-                    {msg.user === "System" ? (
+                    {isSystem ? (
                       <span className="flex items-center gap-2 px-3 py-1 text-xs text-gray-500 bg-gray-200 rounded-full">
                         <Zap className="w-3 h-3 text-gray-400" />
                         {msg.text}
@@ -227,27 +332,30 @@ const ChatRoomPage: React.FC = () => {
                         }`}
                       >
                         <span className="text-sm font-bold text-gray-900 mb-1">
-                          {msg.user}
+                          {msg.user.username} {/* Use username from object */}
                         </span>
 
                         <div
-                          className={`px-4 py-3 rounded-lg shadow-md border whitespace-pre-wrap flex flex-row items-baseline ${
+                          className={`relative px-4 py-3 rounded-lg shadow-md border whitespace-pre-wrap flex flex-row items-baseline ${
                             isMine
                               ? "bg-indigo-600 text-white border-indigo-600"
                               : "bg-white text-gray-800 border-gray-200"
-                          }`}
+                          } ${msg.isPending ? "opacity-70" : ""}`} // Pending style
                           style={{ wordBreak: "break-word" }}
                         >
                           <p className="wrap-break-words">{msg.text}</p>
-                          {msg.timestamp && (
-                            <span
-                              className={`text-xs ml-2 shrink-0 ${
-                                isMine ? "text-indigo-200" : "text-gray-400"
-                              }`}
-                            >
-                              {format(new Date(msg.timestamp), "HH:mm")}
-                            </span>
-                          )}
+                          <span
+                            className={`text-xs ml-2 shrink-0 ${
+                              isMine ? "text-indigo-200" : "text-gray-400"
+                            }`}
+                          >
+                            {/* Show clock if pending, else timestamp */}
+                            {msg.isPending ? (
+                              <Clock className="w-3 h-3 animate-spin" />
+                            ) : (
+                              format(new Date(msg.timestamp), "HH:mm")
+                            )}
+                          </span>
                         </div>
                       </div>
                     )}

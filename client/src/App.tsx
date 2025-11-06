@@ -10,12 +10,13 @@ const App: React.FC = () => {
   return (
     <div className="p-4">
       <Router>
-        <Routes>   
+        <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/lobby" element={<LobbyPage />} />
-          <Route path="/room/:roomName" element={<ChatRoomPage />} />
+          {/* ✅ Use roomId instead of roomName */}
+          <Route path="/room/:roomId" element={<ChatRoomPage />} />
         </Routes>
       </Router>
     </div>

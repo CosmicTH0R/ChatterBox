@@ -7,13 +7,13 @@ import jwt from 'jsonwebtoken';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import roomRoutes from './routes/roomRoutes.js';
+import Message from './models/Message.js'; // ✅ Import Message model
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 
-// Dynamically use frontend URLs from .env
+// ===================== CORS CONFIG =====================
 const allowedOrigins = [
   process.env.CLIENT_URL,
   process.env.CLIENT_URL_LOCAL,
@@ -37,7 +37,7 @@ app.use(
 
 app.use(express.json());
 
-// Connect MongoDB
+// ===================== DATABASE =====================
 try {
   await connectDB(process.env.MONGO_URI);
   console.log('✅ MongoDB connected successfully');
@@ -46,11 +46,11 @@ try {
   process.exit(1);
 }
 
-// REST Routes
+// ===================== REST ROUTES =====================
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
 
-// Setup Socket.IO
+// ===================== SERVER & SOCKET.IO =====================
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -59,10 +59,11 @@ const io = new Server(server, {
   },
 });
 
-// JWT Middleware for secure connections
+// ===================== SOCKET AUTH =====================
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('Authentication error: No token'));
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.data.username = decoded.username;
@@ -73,76 +74,119 @@ io.use((socket, next) => {
   }
 });
 
-// Global object to track users per room
-let roomUsers = {}; // { 'roomName': ['user1', 'user2'] }
+// ===================== ROOM TRACKING =====================
+let roomUsers = {}; // { 'roomId': ['user1', 'user2'] }
 
-// Socket.IO connection logic
 io.on('connection', (socket) => {
-  console.log('🟢 New user connected:', socket.id);
+  console.log('🟢 User connected:', socket.id);
 
-  let userRoom = '';
-  let username = '';
+  let userRoomId = '';
+  const username = socket.data.username;
+  const userId = socket.data.userId;
 
-  // Join room
-  socket.on('joinRoom', (data) => {
-    const roomName = typeof data === 'string' ? data : data?.roomName;
-    if (!roomName) {
-      socket.emit('error', 'Room name is required.');
+  /**
+   * ✅ TASK 7: JOIN ROOM (Modified)
+   * Now loads chat history for the joining user.
+   */
+  socket.on('joinRoom', async (data) => { // 1. Make it async
+    const roomId = typeof data === 'string' ? data : data?.roomId;
+    if (!roomId) {
+      socket.emit('error', 'Room ID is required.');
       return;
     }
 
-    username = socket.data.username;
-    userRoom = roomName;
+    userRoomId = roomId;
+    socket.join(roomId);
 
-    socket.join(userRoom);
+    // 2. Find history (Task 7)
+    try {
+      const history = await Message.find({ room: roomId })
+        .sort({ timestamp: 1 }) // Show oldest first
+        .populate('user', 'username'); // Get user details
 
-    // Add user to roomUsers
-    if (!roomUsers[userRoom]) roomUsers[userRoom] = [];
-    if (!roomUsers[userRoom].includes(username)) roomUsers[userRoom].push(username);
+      // 3. Send history *only* to the connecting socket (Task 7)
+      socket.emit('loadHistory', history);
+    } catch (err) {
+      console.error('Error fetching chat history:', err);
+      socket.emit('error', 'Could not load chat history.');
+    }
 
-    console.log(`👥 ${username} joined ${userRoom}`);
+    // --- Keep existing join logic ---
+    if (!roomUsers[roomId]) roomUsers[roomId] = [];
+    if (!roomUsers[roomId].includes(username)) roomUsers[roomId].push(username);
 
-    // Emit welcome/system messages
-    socket.emit('systemMessage', `Welcome to ${userRoom}!`);
-    socket.to(userRoom).emit('systemMessage', `👋 ${username} joined.`);
+    console.log(`👥 ${username} joined room ${roomId}`);
 
-    // Emit updated online users list
-    io.to(userRoom).emit('updateUserList', roomUsers[userRoom]);
+    socket.emit('systemMessage', `Welcome to the room!`);
+    socket.to(roomId).emit('systemMessage', `👋 ${username} joined the chat.`);
+
+    io.to(roomId).emit('updateUserList', roomUsers[roomId]);
   });
 
-  // Send message
-  socket.on('sendMessage', ({ roomName, text }) => {
-    if (!roomName || !text || !socket.data.username) return;
-    io.to(roomName).emit('receiveMessage', {
-      user: socket.data.username,
+  // ===== SEND MESSAGE (ASYNC SAVE + INSTANT BROADCAST) =====
+  socket.on('sendMessage', async (data) => {
+    const { text, roomId } = data;
+
+    if (!text || !roomId || !userId) {
+      socket.emit('error', 'Invalid message data.');
+      return;
+    }
+
+    // 1️⃣ Broadcast instantly (non-blocking)
+    const tempMessage = {
+      _id: new Date().getTime(), // Temporary ID for frontend tracking
+      user: { _id: userId, username },
       text,
+      room: roomId,
       timestamp: new Date().toISOString(),
-    });
+      isPending: true, // Optional: frontend can show loading indicator
+    };
+    io.to(roomId).emit('receiveMessage', tempMessage);
+
+    // 2️⃣ Save in background
+    try {
+      const message = new Message({
+        text,
+        room: roomId,
+        user: userId,
+      });
+      const saved = await message.save();
+      const populated = await saved.populate('user', 'username');
+
+      // 3️⃣ Confirm save to clients
+      // We send the 'tempId' so the frontend can find and replace
+      io.to(roomId).emit('messageConfirmed', {
+        tempId: tempMessage._id,
+        savedMessage: populated,
+      });
+    } catch (err) {
+      console.error('❌ Message save failed:', err.message);
+      socket.emit('error', 'Message could not be saved.');
+    }
   });
 
-  // Typing indicator
-  socket.on('typing', ({ roomName, user }) => {
-    if (!roomName || !user) return;
-    socket.to(roomName).emit('userTyping', user); // broadcast to others in room
+  // ===== TYPING INDICATOR =====
+  socket.on('typing', ({ roomId, user }) => {
+    if (!roomId || !user) return;
+    socket.to(roomId).emit('userTyping', user);
   });
 
-  // Disconnect
+  // ===== DISCONNECT =====
   socket.on('disconnect', () => {
     console.log('🔴 Disconnected:', socket.id);
 
-    if (userRoom && username) {
-      // Remove user from roomUsers
-      if (roomUsers[userRoom]) {
-        roomUsers[userRoom] = roomUsers[userRoom].filter((u) => u !== username);
-        // Emit updated user list
-        io.to(userRoom).emit('updateUserList', roomUsers[userRoom]);
+    if (userRoomId && username) {
+      if (roomUsers[userRoomId]) {
+        roomUsers[userRoomId] = roomUsers[userRoomId].filter(
+          (u) => u !== username
+        );
+        io.to(userRoomId).emit('updateUserList', roomUsers[userRoomId]);
       }
-      // Broadcast system message
-      io.to(userRoom).emit('systemMessage', `👋 ${username} has left.`);
+      io.to(userRoomId).emit('systemMessage', `👋 ${username} left the chat.`);
     }
   });
 });
 
-// Start server
+// ===================== SERVER START =====================
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🔥 Server running on port ${PORT}`));
