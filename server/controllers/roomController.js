@@ -1,14 +1,14 @@
 import Room from "../models/Room.js";
-import Message from "../models/Message.js"; // 1. Added Message import
+import Message from "../models/Message.js";
+import { nanoid } from "nanoid";
 
-/**
- * 🟢 Get all rooms
- * Returns each room with its MongoDB _id (used as roomId on frontend)
- */
+// ... (getAllRooms is fine) ...
 export const getAllRooms = async (req, res) => {
   try {
-    // ✅ Task 11 requires the creator field to be sent to the frontend
-    const rooms = await Room.find({}, "_id name creator createdAt")
+    const rooms = await Room.find(
+      { isPrivate: false },
+      "_id name creator createdAt"
+    )
       .populate("creator", "username email")
       .sort({ createdAt: -1 });
 
@@ -21,26 +21,36 @@ export const getAllRooms = async (req, res) => {
 
 /**
  * 🟣 Create a new room (protected route)
- * Uses req.user.id from auth middleware as creator.
+ * ✅ WORKAROUND: Only add 'inviteCode' field if the room is private.
  */
 export const createRoom = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, isPrivate } = req.body;
 
     if (!name?.trim()) {
       return res.status(400).json({ message: "Room name is required" });
-    } // Check for duplicate name
+    }
 
     const existingRoom = await Room.findOne({ name });
     if (existingRoom) {
       return res.status(400).json({ message: "Room already exists" });
-    } // ✅ Create with creator ID from token
+    }
 
-    const newRoom = new Room({
+    // 1. Start building the new room data
+    const newRoomData = {
       name,
-      creator: req.user.id, // comes from protect middleware
-    });
+      creator: req.user.id,
+      isPrivate,
+      members: [req.user.id], // Add creator to members list
+    };
 
+    // 2. Only add inviteCode if it's private
+    if (isPrivate) {
+      newRoomData.inviteCode = nanoid(6);
+    }
+
+    // 3. Create the room. Public rooms will NOT have an inviteCode field.
+    const newRoom = new Room(newRoomData);
     await newRoom.save();
 
     res.status(201).json({
@@ -49,6 +59,8 @@ export const createRoom = async (req, res) => {
         _id: newRoom._id,
         name: newRoom.name,
         creator: newRoom.creator,
+        isPrivate: newRoom.isPrivate,
+        inviteCode: newRoom.inviteCode || null, // Send back null for consistency
       },
     });
   } catch (err) {
@@ -57,9 +69,7 @@ export const createRoom = async (req, res) => {
   }
 };
 
-/**
- * 🟡 Get single room by ID (for ChatRoomPage)
- */
+// ... (getRoomById is fine) ...
 export const getRoomById = async (req, res) => {
   try {
     const room = await Room.findById(
@@ -78,28 +88,21 @@ export const getRoomById = async (req, res) => {
   }
 };
 
-/**
- * 🔴 Delete a room (protected route)
- * ✅ Task 10: Checks ownership, then deletes room and all associated messages.
- */
+// ... (deleteRoom is fine) ...
 export const deleteRoom = async (req, res) => {
   try {
-    // Find the room by its ID from the URL param
     const room = await Room.findById(req.params.id);
 
     if (!room) {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    // Check for ownership: req.user.id comes from 'protect' middleware
     if (room.creator.toString() !== req.user.id) {
       return res
         .status(401)
         .json({ message: "Not authorized to delete this room" });
     }
 
-    // If authorized, delete the room and its messages
-    // We use .deleteOne() (modern replacement for .remove())
     await room.deleteOne();
     await Message.deleteMany({ room: room._id });
 
@@ -107,5 +110,57 @@ export const deleteRoom = async (req, res) => {
   } catch (err) {
     console.error("Error deleting room:", err);
     res.status(500).json({ message: "Server error deleting room" });
+  }
+};
+
+// ... (joinPrivateRoom is fine) ...
+export const joinPrivateRoom = async (req, res) => {
+  try {
+    const { name, inviteCode } = req.body;
+    const userId = req.user.id;
+
+    if (!name || !inviteCode) {
+      return res
+        .status(400)
+        .json({ message: "Room name and invite code are required" });
+    }
+
+    const room = await Room.findOne({ name, inviteCode });
+
+    if (!room) {
+      return res
+        .status(404)
+        .json({ message: "Invalid room name or invite code" });
+    }
+
+    if (!room.members.includes(userId)) {
+      room.members.push(userId);
+      await room.save();
+    }
+
+    res.status(200).json(room);
+  } catch (err) {
+    console.error("Error joining private room:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ... (getMyRooms is fine) ...
+export const getMyRooms = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const rooms = await Room.find({
+      isPrivate: true,
+      $or: [{ creator: userId }, { members: userId }],
+    })
+      .select("_id name creator inviteCode")
+      .populate("creator", "username")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(rooms);
+  } catch (err) {
+    console.error("Error fetching user's private rooms:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };

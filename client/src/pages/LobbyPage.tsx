@@ -10,8 +10,14 @@ import {
   LogOut,
   ChevronRight,
   Trash2,
-  AlertTriangle, // Added for modal
-  X, // Added for modal
+  AlertTriangle,
+  X,
+  Lock,
+  Key,
+  Clipboard,
+  Check,
+  List,
+  PlusSquare,
 } from "lucide-react";
 
 interface Room {
@@ -20,55 +26,96 @@ interface Room {
   creator?: string | { _id: string; username: string };
 }
 
+interface MyRoom {
+  _id: string;
+  name: string;
+  inviteCode: string;
+  creator: { _id: string; username: string };
+}
+
 const LobbyPage: React.FC = () => {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [roomName, setRoomName] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false); // For creating
-  const [deletingId, setDeletingId] = useState<string | null>(null); // For deleting spinner
-
-  // --- New state for the delete modal ---
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [roomToDelete, setRoomToDelete] = useState<Room | null>(null);
-
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const currentUserId = localStorage.getItem("userId");
-  
-  // Use VITE_API_URL or a fallback - Patched for build warning
   const API_URL = "http://localhost:5000";
 
-  // Fetch all rooms from backend
-  const fetchRooms = async () => {
+  // --- Common State ---
+  const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [roomToDelete, setRoomToDelete] = useState<Room | MyRoom | null>(null);
+
+  const [activeTab, setActiveTab] = useState("public");
+
+  // --- Public Tab State ---
+  const [publicRooms, setPublicRooms] = useState<Room[]>([]);
+  const [publicRoomName, setPublicRoomName] = useState("");
+  const [publicLoading, setPublicLoading] = useState(false);
+
+  // --- Private Tab State ---
+  const [privateTab, setPrivateTab] = useState("myrooms");
+  const [myRooms, setMyRooms] = useState<MyRoom[]>([]);
+  const [myRoomsLoading, setMyRoomsLoading] = useState(true);
+
+  const [privateRoomName, setPrivateRoomName] = useState("");
+  const [joinRoomName, setJoinRoomName] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
+  const [privateCreateLoading, setPrivateCreateLoading] = useState(false);
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [newInviteCode, setNewInviteCode] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState<string | null>(null);
+
+  const fetchPublicRooms = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/rooms`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setRooms(res.data);
+      setPublicRooms(res.data);
     } catch (err) {
       console.error("Error fetching rooms:", err);
-      setError("Unable to load rooms. Try again later.");
+      setError("Unable to load public rooms. Try again later.");
+    }
+  };
+
+  const fetchMyRooms = async () => {
+    setMyRoomsLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/api/rooms/myrooms`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMyRooms(res.data);
+    } catch (err) {
+      console.error("Error fetching my rooms:", err);
+    } finally {
+      setMyRoomsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!token) navigate("/login");
-    else fetchRooms();
-  }, [token, navigate, API_URL]);
+    if (!token) {
+      navigate("/login");
+      return;
+    }
 
-  // Create new room
-  const createRoom = async (e: React.FormEvent) => {
+    if (activeTab === "public") {
+      fetchPublicRooms();
+    } else {
+      fetchMyRooms();
+    }
+  }, [token, navigate, API_URL, activeTab]);
+
+  const handleCreatePublicRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roomName.trim()) {
+    if (!publicRoomName.trim()) {
       setError("Room name cannot be empty.");
       return;
     }
-    setLoading(true);
+    setPublicLoading(true);
     setError("");
     try {
       await axios.post(
         `${API_URL}/api/rooms`,
-        { name: roomName },
+        { name: publicRoomName, isPrivate: false },
         {
           headers: {
             "Content-Type": "application/json",
@@ -76,37 +123,95 @@ const LobbyPage: React.FC = () => {
           },
         }
       );
-      setRoomName("");
-      await fetchRooms(); // Refresh list
+      setPublicRoomName("");
+      await fetchPublicRooms();
     } catch (err: any) {
-      console.error("Error creating room:", err);
+      console.error("Error creating public room:", err);
       setError(
         err.response?.data?.message || "Failed to create room. Try again."
       );
     } finally {
-      setLoading(false);
+      setPublicLoading(false);
     }
   };
 
-  /**
-   * ✅ Step 1: Renamed 'handleDelete' to 'handleConfirmDelete'
-   * This is now only called when the user clicks "Confirm" in the modal.
-   */
+  const handleCreatePrivateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!privateRoomName.trim()) {
+      setError("Room name cannot be empty.");
+      return;
+    }
+    setPrivateCreateLoading(true);
+    setError("");
+    setNewInviteCode(null);
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/rooms`,
+        { name: privateRoomName, isPrivate: true },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      setPrivateRoomName("");
+      setNewInviteCode(res.data.room.inviteCode);
+      await fetchMyRooms(); // Refresh 'My Rooms' list
+    } catch (err: any) {
+      console.error("Error creating private room:", err);
+      setError(
+        err.response?.data?.message || "Failed to create private room."
+      );
+    } finally {
+      setPrivateCreateLoading(false);
+    }
+  };
+
+  const handleJoinPrivateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinRoomName.trim() || !inviteCode.trim()) {
+      setError("Room name and invite code are required.");
+      return;
+    }
+    setJoinLoading(true);
+    setError("");
+    try {
+      const res = await axios.post(
+        `${API_URL}/api/rooms/join`,
+        { name: joinRoomName, inviteCode },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      await fetchMyRooms(); // Refresh list in case they joined
+      navigate(`/room/${res.data._id}`);
+    } catch (err: any) {
+      console.error("Error joining private room:", err);
+      setError(err.response?.data?.message || "Invalid name or invite code.");
+    } finally {
+      setJoinLoading(false);
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!roomToDelete) return;
-
-    setDeletingId(roomToDelete._id); // Show spinner
+    setDeletingId(roomToDelete._id);
     setError("");
-    setIsModalOpen(false); // Close modal
-
+    setIsModalOpen(false);
     try {
       await axios.delete(`${API_URL}/api/rooms/${roomToDelete._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      // On success, update React state
-      setRooms((prevRooms) =>
-        prevRooms.filter((room) => room._id !== roomToDelete._id)
+      // Update both lists
+      setPublicRooms((prev) =>
+        prev.filter((room) => room._id !== roomToDelete._id)
+      );
+      setMyRooms((prev) =>
+        prev.filter((room) => room._id !== roomToDelete._id)
       );
     } catch (err: any) {
       console.error("Error deleting room:", err);
@@ -114,15 +219,12 @@ const LobbyPage: React.FC = () => {
         err.response?.data?.message || "Failed to delete room. Try again."
       );
     } finally {
-      setDeletingId(null); // Hide spinner
-      setRoomToDelete(null); // Clear target room
+      setDeletingId(null);
+      setRoomToDelete(null);
     }
   };
 
-  /**
-   * ✅ Step 2: Create new functions to open/close the modal
-   */
-  const openDeleteModal = (room: Room) => {
+  const openDeleteModal = (room: Room | MyRoom) => {
     setRoomToDelete(room);
     setIsModalOpen(true);
   };
@@ -132,7 +234,6 @@ const LobbyPage: React.FC = () => {
     setRoomToDelete(null);
   };
 
-  // Update Logout
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
@@ -140,157 +241,450 @@ const LobbyPage: React.FC = () => {
     navigate("/login");
   };
 
+  const copyInvite = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopySuccess(code);
+    setTimeout(() => setCopySuccess(null), 2000);
+  };
+
+  const switchTab = (tab: string) => {
+    setError("");
+    setNewInviteCode(null);
+    setActiveTab(tab);
+  };
+
   return (
     <>
       <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
         <div className="max-w-2xl w-full">
-          {/* ... (Header and Lobby Card) ... */}
+          {/* Header */}
           <div className="flex justify-between items-center mb-8">
-             <div className="flex items-center gap-2">
-               <MessageSquareText className="w-10 h-10 text-indigo-600" />
-               <span className="text-4xl font-bold text-gray-900">Chatterbox</span>
-             </div>
-             <button
-               onClick={handleLogout}
-               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50"
-             >
-               <LogOut className="w-4 h-4" />
-               Logout
-             </button>
-           </div>
- 
-           {/* Lobby Card */}
-           <div className="bg-white p-8 rounded-2xl shadow-xl w-full">
-             <div className="flex items-center gap-3 mb-6">
-               <Users className="w-8 h-8 text-indigo-600" />
-               <h2 className="text-3xl font-bold text-gray-900">Chat Lobby</h2>
-             </div>
-
-          {/* Create Room Form */}
-          <form onSubmit={createRoom} className="mb-6">
-            <label
-              htmlFor="roomName"
-              className="block text-sm font-semibold text-gray-700 mb-2"
+            <div className="flex items-center gap-2">
+              <MessageSquareText className="w-10 h-10 text-indigo-600" />
+              <span className="text-4xl font-bold text-gray-900">
+                Chatterbox
+              </span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50"
             >
-              Create a New Room
-            </label>
-            <div className="flex gap-4">
-              <input
-                id="roomName"
-                type="text"
-                placeholder="Enter room name"
-                value={roomName}
-                onChange={(e) => setRoomName(e.target.value)}
-                className="grow w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
+          </div>
+
+          {/* Lobby Card */}
+          <div className="bg-white p-8 rounded-2xl shadow-xl w-full">
+            <div className="flex items-center gap-3 mb-6">
+              <Users className="w-8 h-8 text-indigo-600" />
+              <h2 className="text-3xl font-bold text-gray-900">Chat Lobby</h2>
+            </div>
+
+            {/* Main Tab Buttons */}
+            <div className="flex border-b border-gray-200 mb-6">
               <button
-                type="submit"
-                disabled={loading}
-                className="shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition-colors disabled:bg-indigo-400 disabled:cursor-not-allowed"
+                onClick={() => switchTab("public")}
+                className={`flex-1 py-3 text-center font-semibold ${
+                  activeTab === "public"
+                    ? "border-b-2 border-indigo-600 text-indigo-600"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
               >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Plus className="w-5 h-5" />
-                )}
-                {loading ? "Creating..." : "Create"}
+                Public Rooms
+              </button>
+              <button
+                onClick={() => switchTab("private")}
+                className={`flex-1 py-3 text-center font-semibold ${
+                  activeTab === "private"
+                    ? "border-b-2 border-indigo-600 text-indigo-600"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Private Rooms
               </button>
             </div>
-          </form>
 
-          {/* Error Display */}
-          {error && (
-            <p className="text-red-600 text-sm text-center mb-4">{error}</p>
-          )}
-
-          {/* Rooms List */}
-          <div className="space-y-3">
-            <h3 className="text-lg font-semibold text-gray-800 border-b pb-2">
-              Available Rooms
-            </h3>
-
-            {rooms.length > 0 ? (
-              <ul className="divide-y divide-gray-200">
-                {rooms.map((room) => {
-                  const creatorId = room.creator
-                    ? typeof room.creator === "string"
-                      ? room.creator
-                      : room.creator._id
-                    : null;
-
-                  return (
-                    <li
-                      key={room._id}
-                      className="py-1 flex items-center justify-between"
-                    >
-                      {/* Link to join room */}
-                      <Link
-                        to={`/room/${room._id}`}
-                        className="flex items-center justify-between p-3 rounded-lg text-indigo-700 hover:bg-indigo-50 transition-colors grow"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Hash className="w-5 h-5 text-gray-500" />
-                          <span className="text-lg font-medium">
-                            {room.name}
-                          </span>
-                        </div>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
-                      </Link>
-
-                      {/* ✅ Step 3: Update Delete Button's onClick */}
-                      {creatorId === currentUserId && (
-                        <button
-                          onClick={() => openDeleteModal(room)} // Changed
-                          disabled={deletingId === room._id}
-                          className="shrink-0 p-3 ml-2 rounded-lg text-red-600 hover:bg-red-100 disabled:text-gray-400 transition-colors"
-                        >
-                          {deletingId === room._id ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-5 h-5" />
-                          )}
-                        </button>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-gray-500 text-center py-4">
-                No rooms available. Create one above.
-              </p>
+            {/* Error Display */}
+            {error && (
+              <p className="text-red-600 text-sm text-center mb-4">{error}</p>
             )}
+
+            {/* Tab Content Wrapper with min-height */}
+            <div style={{ minHeight: "500px" }}>
+              {/* Public Tab Content */}
+              {activeTab === "public" && (
+                <div className="space-y-8 flex flex-col h-full">
+                  {/* Create Public Room Form */}
+                  <form onSubmit={handleCreatePublicRoom}>
+                    <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
+                      Create a New Public Room
+                    </h3>
+                    <div className="flex gap-4">
+                      <input
+                        id="publicRoomName"
+                        type="text"
+                        placeholder="Enter room name"
+                        value={publicRoomName}
+                        onChange={(e) => setPublicRoomName(e.target.value)}
+                        className="grow w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={publicLoading}
+                        className="shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
+                      >
+                        {publicLoading ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Plus className="w-5 h-5" />
+                        )}
+                        {publicLoading ? "Creating..." : "Create"}
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="border-b border-gray-900" />
+
+                  {/* Public Rooms List */}
+                  <div className="space-y-3 flex flex-col flex-grow">
+                    <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
+                      Available Public Rooms
+                    </h3>
+
+                    <div className="overflow-y-auto flex-grow">
+                      {publicRooms.length > 0 ? (
+                        <ul className="divide-y divide-gray-200">
+                          {publicRooms.map((room) => {
+                            const creatorId = room.creator
+                              ? typeof room.creator === "string"
+                                ? room.creator
+                                : room.creator._id
+                              : null;
+
+                            return (
+                              <li
+                                key={room._id}
+                                className="py-1 flex items-center justify-between"
+                              >
+                                <Link
+                                  to={`/room/${room._id}`}
+                                  className="flex items-center justify-between p-3 rounded-lg text-indigo-700 hover:bg-indigo-50 transition grow"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Hash className="w-5 h-5 text-gray-500" />
+                                    <span className="text-lg font-medium">
+                                      {room.name}
+                                    </span>
+                                  </div>
+                                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                                </Link>
+                                {creatorId === currentUserId && (
+                                  <button
+                                    onClick={() => openDeleteModal(room)}
+                                    disabled={deletingId === room._id}
+                                    className="shrink-0 p-3 ml-2 rounded-lg text-red-600 hover:bg-red-100 disabled:text-gray-400"
+                                  >
+                                    {deletingId === room._id ? (
+                                      <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-5 h-5" />
+                                    )}
+                                  </button>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="text-gray-500 text-center py-4">
+                          No public rooms available. Create one!
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Private Tab Content */}
+              {activeTab === "private" && (
+                <div className="space-y-6 flex flex-col h-full">
+                  {/* New Private Sub-Tabs */}
+                  <div className="flex justify-center rounded-lg bg-gray-100 p-1">
+                    <button
+                      onClick={() => setPrivateTab("myrooms")}
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold flex items-center justify-center gap-2 ${
+                        privateTab === "myrooms"
+                          ? "bg-white shadow text-indigo-700"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      <List className="w-4 h-4" />
+                      Your Rooms
+                    </button>
+                    <button
+                      onClick={() => setPrivateTab("create")}
+                      className={`flex-1 py-2 px-4 rounded-md text-sm font-semibold flex items-center justify-center gap-2 ${
+                        privateTab === "create"
+                          ? "bg-white shadow text-indigo-700"
+                          : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      <PlusSquare className="w-4 h-4" />
+                      Create / Join
+                    </button>
+                  </div>
+
+                  {/* Conditional Content for "Your Rooms" */}
+                  {privateTab === "myrooms" && (
+                    <div className="space-y-3 flex flex-col flex-grow">
+                      <h3 className="text-lg font-semibold text-gray-800 pb-2 border-b border-gray-300">
+                        Your Private Rooms
+                      </h3>
+
+                      <div className="overflow-y-auto flex-grow">
+                        {myRoomsLoading ? (
+                          <div className="flex justify-center py-4">
+                            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                          </div>
+                        ) : myRooms.length > 0 ? (
+                          <ul className="divide-y divide-gray-200">
+                            {myRooms.map((room) => (
+                              <li
+                                key={room._id}
+                                className="py-1 flex items-center justify-between"
+                              >
+                                {/* Clickable Link Area */}
+                                <Link
+                                  to={`/room/${room._id}`}
+                                  className="flex items-center justify-between p-3 rounded-lg text-indigo-700 hover:bg-indigo-50 transition grow"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-lg font-medium truncate">
+                                      {room.name}
+                                    </span>
+                                    <p className="text-sm text-gray-500 truncate">
+                                      Creator: {room.creator.username}
+                                      {room.creator._id === currentUserId &&
+                                        " (You)"}
+                                    </p>
+                                  </div>
+                                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                                </Link>
+
+                                {/* Actions Area */}
+                                <div className="flex items-center gap-2 shrink-0 ml-2">
+                                  <span className="text-md font-bold text-gray-700 p-2 bg-gray-100 rounded-md">
+                                    {room.inviteCode}
+                                  </span>
+                                  <button
+                                    onClick={() => copyInvite(room.inviteCode)}
+                                    className="flex items-center justify-center p-3 rounded-lg text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50"
+                                  >
+                                    {copySuccess === room.inviteCode ? (
+                                      <Check className="w-4 h-4 text-green-600" />
+                                    ) : (
+                                      <Clipboard className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                  {room.creator._id === currentUserId && (
+                                    <button
+                                      onClick={() => openDeleteModal(room)}
+                                      disabled={deletingId === room._id}
+                                      className="p-3 rounded-lg text-red-600 hover:bg-red-100 disabled:text-gray-400"
+                                    >
+                                      {deletingId === room._id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-gray-500 text-center py-4">
+                            You haven't created or joined any private rooms yet.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Conditional Content for "Create/Join" */}
+                  {privateTab === "create" && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-8 flex-grow">
+                      {/* Column 1: Create Private Room */}
+                      <div className="space-y-4">
+                        <form onSubmit={handleCreatePrivateRoom}>
+                          <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
+                            Create a Private Room
+                          </h3>
+                          <div className="flex gap-4">
+                            <input
+                              type="text"
+                              placeholder="Enter new room name"
+                              value={privateRoomName}
+                              onChange={(e) =>
+                                setPrivateRoomName(e.target.value)
+                              }
+                              className="grow w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <button
+                              type="submit"
+                              disabled={privateCreateLoading}
+                              className="shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
+                            >
+                              {privateCreateLoading ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <Lock className="w-5 h-5" />
+                              )}
+                              {privateCreateLoading ? "Creating..." : "Create"}
+                            </button>
+                          </div>
+                        </form>
+
+                        {newInviteCode && (
+                          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                            <h4 className="font-semibold text-green-800">
+                              Success! Share this invite code:
+                            </h4>
+                            <div className="flex justify-between items-center mt-2 gap-2">
+                              <span className="text-xl font-bold text-green-700 p-2 bg-green-100 rounded-md">
+                                {newInviteCode}
+                              </span>
+                              <button
+                                onClick={() => copyInvite(newInviteCode)}
+                                className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-700 bg-white rounded-lg shadow-sm border border-gray-300 hover:bg-gray-50"
+                              >
+                                {copySuccess === newInviteCode ? (
+                                  <Check className="w-4 h-4 text-green-600" />
+                                ) : (
+                                  <Clipboard className="w-4 h-4" />
+                                )}
+                                {copySuccess === newInviteCode
+                                  ? "Copied!"
+                                  : "Copy"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ✅ BUG FIX: This div contains the mobile divider AND the desktop join form */}
+                      <div>
+                        {/* ✅ UI Fix 1: Mobile-only divider */}
+                        <div className="my-8 border-b border-gray-900 md:hidden" />
+
+                        {/* Desktop-only vertical divider */}
+                        <div className="hidden md:block my-8 border-b border-gray-900 md:my-0 md:border-b-0 md:border-l md:border-gray-900 md:pl-8 h-full">
+                          {/* Form B: Join Private Room */}
+                          <form onSubmit={handleJoinPrivateRoom}>
+                            <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
+                              Join a Private Room
+                            </h3>
+                            <div className="space-y-4">
+                              <input
+                                type="text"
+                                placeholder="Enter room name"
+                                value={joinRoomName}
+                                onChange={(e) => setJoinRoomName(e.target.value)}
+                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Enter invite code"
+                                value={inviteCode}
+                                onChange={(e) => setInviteCode(e.target.value)}
+                                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              <button
+                                type="submit"
+                                disabled={joinLoading}
+                                className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white bg-green-600 shadow-md hover:bg-green-700 transition disabled:bg-green-400"
+                              >
+                                {joinLoading ? (
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                  <Key className="w-5 h-5" />
+                                )}
+                                {joinLoading ? "Joining..." : "Join Room"}
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+
+                        {/* ✅ BUG FIX: Mobile-only Join Room Form */}
+                        <form className="md:hidden" onSubmit={handleJoinPrivateRoom}>
+                          <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
+                            Join a Private Room
+                          </h3>
+                          <div className="space-y-4">
+                            <input
+                              type="text"
+                              placeholder="Enter room name"
+                              value={joinRoomName}
+                              onChange={(e) => setJoinRoomName(e.target.value)}
+                              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Enter invite code"
+                              value={inviteCode}
+                              onChange={(e) => setInviteCode(e.target.value)}
+                              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <button
+                              type="submit"
+                              disabled={joinLoading}
+                              className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold text-white bg-green-600 shadow-md hover:bg-green-700 transition disabled:bg-green-400"
+                            >
+                              {joinLoading ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <Key className="w-5 h-5" />
+                              )}
+                              {joinLoading ? "Joining..." : "Join Room"}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-      {/* ✅ Step 4: Add the Modal JSX */}
+      {/* Delete Modal */}
       {isModalOpen && roomToDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          aria-labelledby="modal-title"
-          role="dialog"
-          aria-modal="true"
+          onClick={closeDeleteModal}
         >
-          <div className="relative max-w-md w-full bg-white p-6 rounded-2xl shadow-xl m-4">
-            {/* Close Button */}
+          <div
+            className="relative max-w-md w-full bg-white p-6 rounded-2xl shadow-xl m-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               onClick={closeDeleteModal}
               className="absolute top-4 right-4 p-1 rounded-lg text-gray-500 hover:bg-gray-100"
             >
               <X className="w-5 h-5" />
             </button>
-
             <div className="flex items-start">
-              {/* Icon */}
               <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
                 <AlertTriangle
                   className="h-6 w-6 text-red-600"
                   aria-hidden="true"
                 />
               </div>
-
               <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                 <h3
                   className="text-lg leading-6 font-bold text-gray-900"
@@ -304,20 +698,17 @@ const LobbyPage: React.FC = () => {
                     <strong className="text-gray-700">
                       {roomToDelete.name}
                     </strong>
-                    "? All messages in this room will be permanently deleted.
-                    This action cannot be undone.
+                    "? All messages... will be permanently deleted.
                   </p>
                 </div>
               </div>
             </div>
-
-            {/* Action Buttons */}
             <div className="mt-5 sm:mt-6 sm:flex sm:flex-row-reverse gap-3">
               <button
                 type="button"
                 disabled={deletingId === roomToDelete._id}
                 onClick={handleConfirmDelete}
-                className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-semibold text-white hover:bg-red-700 sm:w-auto sm:text-sm disabled:bg-red-300"
+                className="w-full inline-flex justify-center rounded-lg border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-semibold text-white hover:bg-red-700 sm:w-auto sm:text-sm disabled:bg-red-300"
               >
                 {deletingId === roomToDelete._id ? (
                   <Loader2 className="w-5 h-5 animate-spin mr-2" />

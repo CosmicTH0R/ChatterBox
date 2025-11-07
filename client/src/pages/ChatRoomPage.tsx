@@ -2,8 +2,18 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import axios from "axios"; // Import axios to fetch room details
-import { ArrowLeft, Send, User, Zap, Users, X, Clock } from "lucide-react";
+import {
+  ArrowLeft,
+  Send,
+  User,
+  Zap,
+  Users,
+  X,
+  Clock,
+  Clipboard, // 1. Added Clipboard icon
+} from "lucide-react";
 import { format } from "date-fns";
+import { toast, Toaster } from "react-hot-toast"; // 2. Added Toaster
 
 /*
  * Matches the populated data from the backend.
@@ -36,6 +46,11 @@ const ChatRoomPage: React.FC = () => {
   // 🔹 Bonus: Add state to hold the room name
   const [roomName, setRoomName] = useState("Loading room...");
 
+  /**
+   * ✅ Task 20: Add state for invite code
+   */
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Resolved build warning by hardcoding fallback
@@ -45,7 +60,9 @@ const ChatRoomPage: React.FC = () => {
   const currentUser = localStorage.getItem("username");
   const token = localStorage.getItem("token");
 
-  const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const typingTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>(
+    {}
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setText(e.target.value);
@@ -105,22 +122,12 @@ const ChatRoomPage: React.FC = () => {
     socket.emit("joinRoom", { roomId });
 
     // --- NEW LISTENERS FOR TASK 8 ---
-
-    /**
-     * ✅ Task 8: Listen for 'loadHistory'
-     * Replaces the entire message list with the history.
-     */
     socket.on("loadHistory", (history: Message[]) => {
       setMessages(history);
     });
 
-    /**
-     * ✅ Task 8: Listen for 'receiveMessage'
-     * This now handles your *pending* messages.
-     */
     socket.on("receiveMessage", (pendingMsg: Message) => {
       setMessages((prev) => [...prev, pendingMsg]);
-      // Stop typing for *other* users when they send a message
       if (pendingMsg.user.username !== currentUser) {
         setTypingUsers((prev) =>
           prev.filter((u) => u !== pendingMsg.user.username)
@@ -128,20 +135,13 @@ const ChatRoomPage: React.FC = () => {
       }
     });
 
-    /**
-     * ✅ Bug Fix: Correctly handle the 'messageConfirmed' payload
-     * This replaces the pending message with the real one from the DB.
-     */
     socket.on(
       "messageConfirmed",
       (data: { tempId: string | number; savedMessage: Message }) => {
         const { tempId, savedMessage } = data;
 
         setMessages((prev) =>
-          prev.map((msg) =>
-            // Find the pending message by its temporary ID and replace it
-            msg._id === tempId ? savedMessage : msg
-          )
+          prev.map((msg) => (msg._id === tempId ? savedMessage : msg))
         );
       }
     );
@@ -173,6 +173,16 @@ const ChatRoomPage: React.FC = () => {
       }, 2000);
     });
 
+    /**
+     * ✅ Task 20: Listen for room details
+     * (Sent by server only if user is the creator)
+     */
+    socket.on("roomDetails", (details: { inviteCode: string }) => {
+      if (details.inviteCode) {
+        setInviteCode(details.inviteCode);
+      }
+    });
+
     socket.on("connect_error", (err: any) => {
       console.error("Socket connection error:", err.message);
     });
@@ -185,11 +195,9 @@ const ChatRoomPage: React.FC = () => {
       socket.off("systemMessage");
       socket.off("updateUserList");
       socket.off("userTyping");
+      socket.off("roomDetails"); // <-- Cleanup
       socket.off("connect_error");
     };
-    /**
-     * ✅ Task 4: Add roomId to dependency array
-     */
   }, [socket, roomId, currentUser]);
 
   // Scroll to bottom effect
@@ -200,17 +208,33 @@ const ChatRoomPage: React.FC = () => {
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim() || !socket || !roomId) return;
-    /**
-     * ✅ Task 6 & 4: Emit 'sendMessage' with roomId and text
-     */
     socket.emit("sendMessage", { roomId, text });
     setText("");
-    // Stop typing for current user immediately
     setTypingUsers((prev) => prev.filter((u) => u !== currentUser));
+  };
+
+  /**
+   * ✅ Task 21: Add Copy Invite function
+   */
+  const copyInvite = () => {
+    if (!inviteCode || !roomName) return;
+    const inviteText = `Join my room "${roomName}" on Chatterbox! Code: ${inviteCode}`;
+
+    navigator.clipboard.writeText(inviteText).then(
+      () => {
+        toast.success("Invite copied to clipboard!");
+      },
+      (err) => {
+        console.error("Could not copy text: ", err);
+        toast.error("Failed to copy invite.");
+      }
+    );
   };
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
+      {/* 3. Added Toaster component */}
+      <Toaster position="top-center" />
       <div className="relative flex w-full max-w-7xl h-[90vh] bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Sidebar Desktop */}
         <div className="hidden md:flex flex-col w-48 border-r border-gray-200 p-4 bg-gray-50">
@@ -267,16 +291,35 @@ const ChatRoomPage: React.FC = () => {
                 <span className="hidden md:inline md:ml-2">Back to Lobby</span>
               </button>
 
-              {/* 🔹 Bonus: Display fetched roomName */}
               <h2 className="text-xl font-bold text-gray-900">{roomName}</h2>
 
+              {/* Mobile Users Button */}
               <button
                 onClick={() => setIsUserListOpen(true)}
                 className="p-2 rounded-lg text-gray-700 hover:bg-gray-100 md:hidden"
               >
                 <Users className="w-5 h-5" />
               </button>
-              <div className="hidden md:block w-28"></div>
+
+              {/**
+               * ✅ Task 21: Add "Copy Invite" button for desktop
+               * Replaces the empty placeholder div
+               */}
+              <div
+                className="hidden md:flex justify-end"
+                style={{ width: "130px" }} // Give it space
+              >
+                {inviteCode && (
+                  <button
+                    onClick={copyInvite}
+                    title="Copy Invite Code"
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-600 bg-indigo-100 rounded-lg hover:bg-indigo-200 transition"
+                  >
+                    <Clipboard className="w-4 h-4" />
+                    <span>Copy Invite</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Typing Indicator */}
@@ -296,16 +339,13 @@ const ChatRoomPage: React.FC = () => {
           {/* Messages */}
           <div className="grow p-4 overflow-y-auto bg-gray-50 flex flex-col">
             <div className="space-y-4 grow">
-              {/**
-               * ✅ Task 8: Updated Message Rendering
-               */}
               {messages.map((msg) => {
                 const isMine = msg.user.username === currentUser;
                 const isSystem = msg.user.username === "System";
 
                 return (
                   <div
-                    key={msg._id} // Use unique _id for key
+                    key={msg._id}
                     className={`flex gap-3 mb-2 ${
                       isSystem
                         ? "justify-center"
@@ -332,7 +372,7 @@ const ChatRoomPage: React.FC = () => {
                         }`}
                       >
                         <span className="text-sm font-bold text-gray-900 mb-1">
-                          {msg.user.username} {/* Use username from object */}
+                          {msg.user.username}
                         </span>
 
                         <div
@@ -340,7 +380,7 @@ const ChatRoomPage: React.FC = () => {
                             isMine
                               ? "bg-indigo-600 text-white border-indigo-600"
                               : "bg-white text-gray-800 border-gray-200"
-                          } ${msg.isPending ? "opacity-70" : ""}`} // Pending style
+                          } ${msg.isPending ? "opacity-70" : ""}`}
                           style={{ wordBreak: "break-word" }}
                         >
                           <p className="wrap-break-words">{msg.text}</p>
@@ -349,7 +389,6 @@ const ChatRoomPage: React.FC = () => {
                               isMine ? "text-indigo-200" : "text-gray-400"
                             }`}
                           >
-                            {/* Show clock if pending, else timestamp */}
                             {msg.isPending ? (
                               <Clock className="w-3 h-3 animate-spin" />
                             ) : (

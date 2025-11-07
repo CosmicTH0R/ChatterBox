@@ -7,7 +7,8 @@ import jwt from 'jsonwebtoken';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import roomRoutes from './routes/roomRoutes.js';
-import Message from './models/Message.js'; // ✅ Import Message model
+import Message from './models/Message.js';
+import Room from './models/Room.js'; // 1. Import the Room model
 
 dotenv.config();
 
@@ -40,7 +41,6 @@ app.use(express.json());
 // ===================== DATABASE =====================
 try {
   await connectDB(process.env.MONGO_URI);
-  console.log('✅ MongoDB connected successfully');
 } catch (error) {
   console.error('❌ MongoDB connection failed:', error.message);
   process.exit(1);
@@ -82,13 +82,13 @@ io.on('connection', (socket) => {
 
   let userRoomId = '';
   const username = socket.data.username;
-  const userId = socket.data.userId;
+  const userId = socket.data.userId; // Get userId from socket data
 
   /**
-   * ✅ TASK 7: JOIN ROOM (Modified)
-   * Now loads chat history for the joining user.
+   * ✅ TASK 7 & 19: JOIN ROOM (Modified)
+   * Loads history and sends invite code to creator.
    */
-  socket.on('joinRoom', async (data) => { // 1. Make it async
+  socket.on('joinRoom', async (data) => {
     const roomId = typeof data === 'string' ? data : data?.roomId;
     if (!roomId) {
       socket.emit('error', 'Room ID is required.');
@@ -101,14 +101,31 @@ io.on('connection', (socket) => {
     // 2. Find history (Task 7)
     try {
       const history = await Message.find({ room: roomId })
-        .sort({ timestamp: 1 }) // Show oldest first
-        .populate('user', 'username'); // Get user details
+        .sort({ timestamp: 1 })
+        .populate('user', 'username');
 
       // 3. Send history *only* to the connecting socket (Task 7)
       socket.emit('loadHistory', history);
     } catch (err) {
       console.error('Error fetching chat history:', err);
       socket.emit('error', 'Could not load chat history.');
+    }
+
+    // --- ✅ Task 19: Send room details to creator ---
+    try {
+      const room = await Room.findById(roomId);
+      
+      // Check if room exists and has a creator
+      if (room && room.creator) {
+        // Check if the joining user is the creator
+        if (room.creator.toString() === userId) {
+          // Send invite code *only* to the creator's socket
+          socket.emit('roomDetails', { inviteCode: room.inviteCode });
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching room details for creator:', err);
+      // Don't block joining, just log error
     }
 
     // --- Keep existing join logic ---
@@ -139,7 +156,7 @@ io.on('connection', (socket) => {
       text,
       room: roomId,
       timestamp: new Date().toISOString(),
-      isPending: true, // Optional: frontend can show loading indicator
+      isPending: true,
     };
     io.to(roomId).emit('receiveMessage', tempMessage);
 
@@ -154,7 +171,6 @@ io.on('connection', (socket) => {
       const populated = await saved.populate('user', 'username');
 
       // 3️⃣ Confirm save to clients
-      // We send the 'tempId' so the frontend can find and replace
       io.to(roomId).emit('messageConfirmed', {
         tempId: tempMessage._id,
         savedMessage: populated,
