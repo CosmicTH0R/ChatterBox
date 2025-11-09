@@ -130,13 +130,20 @@ const LobbyPage: React.FC = () => {
       await axios.post(
         `${API_URL}/api/rooms`,
         { name: publicRoomName, isPrivate: false },
-        { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       setPublicRoomName("");
       await fetchPublicRooms();
     } catch (err: any) {
       console.error("Error creating public room:", err);
-      setError(err.response?.data?.message || "Failed to create room. Try again.");
+      setError(
+        err.response?.data?.message || "Failed to create room. Try again."
+      );
     } finally {
       setPublicLoading(false);
     }
@@ -155,14 +162,21 @@ const LobbyPage: React.FC = () => {
       const res = await axios.post(
         `${API_URL}/api/rooms`,
         { name: privateRoomName, isPrivate: true },
-        { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       setPrivateRoomName("");
       setNewInviteCode(res.data.room.inviteCode);
       await fetchMyRooms(); // Refresh 'My Rooms' list
     } catch (err: any) {
       console.error("Error creating private room:", err);
-      setError(err.response?.data?.message || "Failed to create private room.");
+      setError(
+        err.response?.data?.message || "Failed to create private room."
+      );
     } finally {
       setPrivateCreateLoading(false);
     }
@@ -180,7 +194,12 @@ const LobbyPage: React.FC = () => {
       const res = await axios.post(
         `${API_URL}/api/rooms/join`,
         { name: joinRoomName, inviteCode },
-        { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
       );
       await fetchMyRooms(); // Refresh list in case they joined
       navigate(`/room/${res.data._id}`);
@@ -201,11 +220,17 @@ const LobbyPage: React.FC = () => {
       await axios.delete(`${API_URL}/api/rooms/${roomToDelete._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setPublicRooms((prev) => prev.filter((room) => room._id !== roomToDelete._id));
-      setMyRooms((prev) => prev.filter((room) => room._id !== roomToDelete._id));
+      setPublicRooms((prev) =>
+        prev.filter((room) => room._id !== roomToDelete._id)
+      );
+      setMyRooms((prev) =>
+        prev.filter((room) => room._id !== roomToDelete._id)
+      );
     } catch (err: any) {
       console.error("Error deleting room:", err);
-      setError(err.response?.data?.message || "Failed to delete room. Try again.");
+      setError(
+        err.response?.data?.message || "Failed to delete room. Try again."
+      );
     } finally {
       setDeletingId(null);
       setRoomToDelete(null);
@@ -244,13 +269,11 @@ const LobbyPage: React.FC = () => {
   // --- RENDER ---
   return (
     <>
-      {/* --- NEW: FULL-PAGE CONTAINER --- */}
-      <div className="min-h-screen bg-gray-100 font-inter">
-        
-        {/* --- NEW: HEADER (matches Profile Page) --- */}
+      {/* 1. FULL-PAGE CONTAINER is now a flex column */}
+      <div className="min-h-screen bg-gray-100 font-inter flex flex-col">
+        {/* Header (unchanged) */}
         <header className="bg-white shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            
             {/* Logo */}
             <div className="flex items-center gap-2">
               <MessageSquareText className="w-8 h-8 text-indigo-600" />
@@ -264,10 +287,15 @@ const LobbyPage: React.FC = () => {
               <div>
                 <Menu.Button className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50 transition-colors">
                   <img
-                    src={userAvatar || 'https://api.dicebear.com/7.x/bottts/svg'}
+                    src={
+                      userAvatar || "https://api.dicebear.com/7.x/bottts/svg"
+                    }
                     alt="Profile"
                     className="w-6 h-6 rounded-full bg-gray-200 object-cover border border-gray-200"
-                    onError={(e) => (e.currentTarget.src = 'https://api.dicebear.com/7.x/bottts/svg')}
+                    onError={(e) =>
+                      (e.currentTarget.src =
+                        "https://api.dicebear.com/7.x/bottts/svg")
+                    }
                   />
                   <span className="hidden sm:block">{userName}</span>
                   <ChevronDown
@@ -290,13 +318,30 @@ const LobbyPage: React.FC = () => {
                     <Menu.Item>
                       {({ active }) => (
                         <button
-                          onClick={() => navigate('/profile')}
+                          onClick={() => navigate("/profile")}
                           className={`${
-                            active ? "bg-gray-100 text-gray-900" : "text-gray-700"
+                            active
+                              ? "bg-gray-100 text-gray-900"
+                              : "text-gray-700"
                           } group flex w-full items-center px-4 py-2 text-sm`}
                         >
                           <User className="mr-2 h-5 w-5" aria-hidden="true" />
                           My Profile
+                        </button>
+                      )}
+                    </Menu.Item>
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={() => navigate("/friends")}
+                          className={`${
+                            active
+                              ? "bg-gray-100 text-gray-900"
+                              : "text-gray-700"
+                          } group flex w-full items-center px-4 py-2 text-sm`}
+                        >
+                          <Users className="mr-2 h-5 w-5" aria-hidden="true" />
+                          Friends
                         </button>
                       )}
                     </Menu.Item>
@@ -319,13 +364,11 @@ const LobbyPage: React.FC = () => {
             </Menu>
           </div>
         </header>
-        
-        {/* --- NEW: MAIN CONTENT AREA --- */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-12">
-          
-          {/* Lobby Card (now centered within the 'main' container) */}
-          <div className="max-w-7xl mx-auto bg-white p-8 rounded-2xl shadow-xl w-full">
-            
+
+        {/* 2. MAIN CONTENT AREA: now grows to fill space */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-12 grow flex flex-col w-full">
+          {/* 3. Lobby Card: now grows to fill space */}
+          <div className="max-w-7xl mx-auto bg-white p-8 rounded-2xl shadow-xl w-full flex flex-col grow">
             <div className="flex items-center gap-3 mb-6">
               <Users className="w-8 h-8 text-indigo-600" />
               <h2 className="text-3xl font-bold text-gray-900">Chat Lobby</h2>
@@ -360,11 +403,11 @@ const LobbyPage: React.FC = () => {
               <p className="text-red-600 text-sm text-center mb-4">{error}</p>
             )}
 
-            {/* Tab Content Wrapper with min-height */}
-            <div style={{ minHeight: "500px" }}>
+            {/* 4. Tab Content Wrapper: now grows and is a flex col */}
+            <div className="grow flex flex-col">
               {/* Public Tab Content */}
               {activeTab === "public" && (
-                <div className="space-y-8 flex flex-col h-full">
+                <div className="space-y-8 flex flex-col grow">
                   {/* Create Public Room Form */}
                   <form onSubmit={handleCreatePublicRoom}>
                     <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
@@ -397,12 +440,12 @@ const LobbyPage: React.FC = () => {
                   <div className="border-b border-gray-900" />
 
                   {/* Public Rooms List */}
-                  <div className="space-y-3 flex flex-col flex-grow">
+                  <div className="space-y-3 flex flex-col grow">
                     <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
                       Available Public Rooms
                     </h3>
 
-                    <div className="overflow-y-auto flex-grow">
+                    <div className="overflow-y-auto grow">
                       {publicRooms.length > 0 ? (
                         <ul className="divide-y divide-gray-200">
                           {publicRooms.map((room) => {
@@ -447,9 +490,12 @@ const LobbyPage: React.FC = () => {
                           })}
                         </ul>
                       ) : (
-                        <p className="text-gray-500 text-center py-4">
-                          No public rooms available. Create one!
-                        </p>
+                        // 5. Centered "empty" message
+                        <div className="grow flex items-center justify-center h-full">
+                          <p className="text-gray-500">
+                            No public rooms available. Create one!
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -458,7 +504,7 @@ const LobbyPage: React.FC = () => {
 
               {/* Private Tab Content */}
               {activeTab === "private" && (
-                <div className="space-y-6 flex flex-col h-full">
+                <div className="space-y-6 flex flex-col grow">
                   {/* New Private Sub-Tabs */}
                   <div className="flex justify-center rounded-lg bg-gray-100 p-1">
                     <button
@@ -487,12 +533,12 @@ const LobbyPage: React.FC = () => {
 
                   {/* Conditional Content for "Your Rooms" */}
                   {privateTab === "myrooms" && (
-                    <div className="space-y-3 flex flex-col flex-grow">
+                    <div className="space-y-3 flex flex-col grow">
                       <h3 className="text-lg font-semibold text-gray-800 pb-2 border-b border-gray-300">
                         Your Private Rooms
                       </h3>
 
-                      <div className="overflow-y-auto flex-grow">
+                      <div className="overflow-y-auto grow">
                         {myRoomsLoading ? (
                           <div className="flex justify-center py-4">
                             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -555,9 +601,13 @@ const LobbyPage: React.FC = () => {
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-gray-500 text-center py-4">
-                            You haven't created or joined any private rooms yet.
-                          </p>
+                          // 5. Centered "empty" message
+                          <div className="grow flex items-center justify-center h-full">
+                            <p className="text-gray-500">
+                              You haven't created or joined any private rooms
+                              yet.
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -565,7 +615,7 @@ const LobbyPage: React.FC = () => {
 
                   {/* Conditional Content for "Create/Join" */}
                   {privateTab === "create" && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-8 flex-grow">
+                    <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-8 grow">
                       {/* Column 1: Create Private Room */}
                       <div className="space-y-4">
                         <form onSubmit={handleCreatePrivateRoom}>
@@ -641,7 +691,9 @@ const LobbyPage: React.FC = () => {
                                 type="text"
                                 placeholder="Enter room name"
                                 value={joinRoomName}
-                                onChange={(e) => setJoinRoomName(e.target.value)}
+                                onChange={(e) =>
+                                  setJoinRoomName(e.target.value)
+                                }
                                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                               />
                               <input
@@ -668,7 +720,10 @@ const LobbyPage: React.FC = () => {
                         </div>
 
                         {/* Mobile-only Join Room Form */}
-                        <form className="md:hidden" onSubmit={handleJoinPrivateRoom}>
+                        <form
+                          className="md:hidden"
+                          onSubmit={handleJoinPrivateRoom}
+                        >
                           <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
                             Join a Private Room
                           </h3>
@@ -677,7 +732,9 @@ const LobbyPage: React.FC = () => {
                               type="text"
                               placeholder="Enter room name"
                               value={joinRoomName}
-                              onChange={(e) => setJoinRoomName(e.target.value)}
+                              onChange={(e) =>
+                                setJoinRoomName(e.target.value)
+                              }
                               className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                             <input
@@ -702,7 +759,6 @@ const LobbyPage: React.FC = () => {
                           </div>
                         </form>
                       </div>
-
                     </div>
                   )}
                 </div>
@@ -712,7 +768,7 @@ const LobbyPage: React.FC = () => {
         </main>
       </div>
 
-      {/* Delete Modal */}
+      {/* Delete Modal (unchanged) */}
       {isModalOpen && roomToDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"

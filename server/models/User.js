@@ -11,7 +11,6 @@ const UserSchema = new mongoose.Schema(
       trim: true,
       minlength: [3, "Username must be at least 3 characters long"],
     },
-    // --- ADDED THIS FIELD ---
     email: {
       type: String,
       unique: true,
@@ -21,6 +20,7 @@ const UserSchema = new mongoose.Schema(
         /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
         "Please fill a valid email address",
       ],
+      sparse: true, // Recommended for optional unique fields
     },
     password: {
       type: String,
@@ -28,17 +28,36 @@ const UserSchema = new mongoose.Schema(
       minlength: [6, "Password must be at least 6 characters long"],
       select: false, // exclude password from query results by default
     },
-    // --- ADDED THIS FIELD ---
     name: {
       type: String,
       trim: true,
       default: "", // Good to have a default
     },
-    // --- ADDED THIS FIELD ---
     avatarUrl: {
       type: String,
       default: "", // Good to have a default
     },
+
+    // --- (START) PHASE 7: FRIEND SYSTEM FIELDS ---
+    friends: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    sentFriendRequests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    receivedFriendRequests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    // --- (END) PHASE 7: FRIEND SYSTEM FIELDS ---
   },
   { timestamps: true }
 );
@@ -60,7 +79,7 @@ UserSchema.pre("save", async function (next) {
 // ✅ Instance method for password verification
 UserSchema.methods.matchPassword = async function (enteredPassword) {
   // We need to fetch the password explicitly since it's 'select: false'
-  const user = await mongoose.model("User").findById(this._id).select('+password');
+  const user = await mongoose.model("User").findById(this._id).select("+password");
   return await bcrypt.compare(enteredPassword, user.password);
 };
 
