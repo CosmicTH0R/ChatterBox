@@ -37,7 +37,7 @@ const LobbyPage: React.FC = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const currentUserId = localStorage.getItem("userId");
-  const API_URL = "http://localhost:5000";
+  const API_URL = import.meta.env.VITE_API_URL;
 
   // --- Common State ---
   const [error, setError] = useState("");

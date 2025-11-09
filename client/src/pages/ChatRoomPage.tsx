@@ -54,8 +54,8 @@ const ChatRoomPage: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Resolved build warning by hardcoding fallback
-  const SOCKET_URL = "http://localhost:5000";
-  const API_URL = "http://localhost:5000";
+  const SOCKET_URL =  import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_URL = import.meta.env.VITE_API_URL;
 
   const currentUser = localStorage.getItem("username");
   const token = localStorage.getItem("token");
