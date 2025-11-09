@@ -10,9 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
     "axios": "^1.13.1",
+    "cloudinary": "^2.8.0",
     "date-fns": "^4.1.0",
+    "dotenv": "^17.2.3",
     "lucide-react": "^0.552.0",
+    "multer": "^2.0.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-hot-toast": "^2.6.0",

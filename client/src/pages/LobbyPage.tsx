@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Fragment } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
+import { Dialog, Transition, Menu } from "@headlessui/react";
 import {
   MessageSquareText,
   Hash,
@@ -18,14 +19,16 @@ import {
   Check,
   List,
   PlusSquare,
+  User,
+  ChevronDown,
 } from "lucide-react";
 
+// (Interfaces are unchanged)
 interface Room {
   _id: string;
   name: string;
   creator?: string | { _id: string; username: string };
 }
-
 interface MyRoom {
   _id: string;
   name: string;
@@ -39,24 +42,20 @@ const LobbyPage: React.FC = () => {
   const currentUserId = localStorage.getItem("userId");
   const API_URL = import.meta.env.VITE_API_URL;
 
-  // --- Common State ---
+  // (All states are unchanged)
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<Room | MyRoom | null>(null);
-
   const [activeTab, setActiveTab] = useState("public");
-
-  // --- Public Tab State ---
+  const [userAvatar, setUserAvatar] = useState("");
+  const [userName, setUserName] = useState("User");
   const [publicRooms, setPublicRooms] = useState<Room[]>([]);
   const [publicRoomName, setPublicRoomName] = useState("");
   const [publicLoading, setPublicLoading] = useState(false);
-
-  // --- Private Tab State ---
   const [privateTab, setPrivateTab] = useState("myrooms");
   const [myRooms, setMyRooms] = useState<MyRoom[]>([]);
   const [myRoomsLoading, setMyRoomsLoading] = useState(true);
-
   const [privateRoomName, setPrivateRoomName] = useState("");
   const [joinRoomName, setJoinRoomName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
@@ -65,6 +64,7 @@ const LobbyPage: React.FC = () => {
   const [newInviteCode, setNewInviteCode] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
 
+  // (All functions are unchanged)
   const fetchPublicRooms = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/rooms`, {
@@ -96,7 +96,21 @@ const LobbyPage: React.FC = () => {
       navigate("/login");
       return;
     }
-
+    const fetchUserProfile = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/users/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const bustedUrl = res.data.avatarUrl.includes("?")
+          ? `${res.data.avatarUrl}&_t=${new Date().getTime()}`
+          : `${res.data.avatarUrl}?_t=${new Date().getTime()}`;
+        setUserAvatar(bustedUrl || "");
+        setUserName(res.data.name || res.data.username || "User");
+      } catch (err) {
+        console.log("Could not fetch user profile for header", err);
+      }
+    };
+    fetchUserProfile();
     if (activeTab === "public") {
       fetchPublicRooms();
     } else {
@@ -116,20 +130,13 @@ const LobbyPage: React.FC = () => {
       await axios.post(
         `${API_URL}/api/rooms`,
         { name: publicRoomName, isPrivate: false },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }
       );
       setPublicRoomName("");
       await fetchPublicRooms();
     } catch (err: any) {
       console.error("Error creating public room:", err);
-      setError(
-        err.response?.data?.message || "Failed to create room. Try again."
-      );
+      setError(err.response?.data?.message || "Failed to create room. Try again.");
     } finally {
       setPublicLoading(false);
     }
@@ -148,21 +155,14 @@ const LobbyPage: React.FC = () => {
       const res = await axios.post(
         `${API_URL}/api/rooms`,
         { name: privateRoomName, isPrivate: true },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }
       );
       setPrivateRoomName("");
       setNewInviteCode(res.data.room.inviteCode);
       await fetchMyRooms(); // Refresh 'My Rooms' list
     } catch (err: any) {
       console.error("Error creating private room:", err);
-      setError(
-        err.response?.data?.message || "Failed to create private room."
-      );
+      setError(err.response?.data?.message || "Failed to create private room.");
     } finally {
       setPrivateCreateLoading(false);
     }
@@ -180,12 +180,7 @@ const LobbyPage: React.FC = () => {
       const res = await axios.post(
         `${API_URL}/api/rooms/join`,
         { name: joinRoomName, inviteCode },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        { headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` } }
       );
       await fetchMyRooms(); // Refresh list in case they joined
       navigate(`/room/${res.data._id}`);
@@ -206,18 +201,11 @@ const LobbyPage: React.FC = () => {
       await axios.delete(`${API_URL}/api/rooms/${roomToDelete._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Update both lists
-      setPublicRooms((prev) =>
-        prev.filter((room) => room._id !== roomToDelete._id)
-      );
-      setMyRooms((prev) =>
-        prev.filter((room) => room._id !== roomToDelete._id)
-      );
+      setPublicRooms((prev) => prev.filter((room) => room._id !== roomToDelete._id));
+      setMyRooms((prev) => prev.filter((room) => room._id !== roomToDelete._id));
     } catch (err: any) {
       console.error("Error deleting room:", err);
-      setError(
-        err.response?.data?.message || "Failed to delete room. Try again."
-      );
+      setError(err.response?.data?.message || "Failed to delete room. Try again.");
     } finally {
       setDeletingId(null);
       setRoomToDelete(null);
@@ -253,29 +241,91 @@ const LobbyPage: React.FC = () => {
     setActiveTab(tab);
   };
 
+  // --- RENDER ---
   return (
     <>
-      <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
-        <div className="max-w-2xl w-full">
-          {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+      {/* --- NEW: FULL-PAGE CONTAINER --- */}
+      <div className="min-h-screen bg-gray-100 font-inter">
+        
+        {/* --- NEW: HEADER (matches Profile Page) --- */}
+        <header className="bg-white shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            
+            {/* Logo */}
             <div className="flex items-center gap-2">
-              <MessageSquareText className="w-10 h-10 text-indigo-600" />
-              <span className="text-4xl font-bold text-gray-900">
+              <MessageSquareText className="w-8 h-8 text-indigo-600" />
+              <span className="text-2xl font-bold text-gray-900">
                 Chatterbox
               </span>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50"
-            >
-              <LogOut className="w-4 h-4" />
-              Logout
-            </button>
-          </div>
 
-          {/* Lobby Card */}
-          <div className="bg-white p-8 rounded-2xl shadow-xl w-full">
+            {/* Profile Dropdown */}
+            <Menu as="div" className="relative inline-block text-left">
+              <div>
+                <Menu.Button className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50 transition-colors">
+                  <img
+                    src={userAvatar || 'https://api.dicebear.com/7.x/bottts/svg'}
+                    alt="Profile"
+                    className="w-6 h-6 rounded-full bg-gray-200 object-cover border border-gray-200"
+                    onError={(e) => (e.currentTarget.src = 'https://api.dicebear.com/7.x/bottts/svg')}
+                  />
+                  <span className="hidden sm:block">{userName}</span>
+                  <ChevronDown
+                    className="w-4 h-4 text-gray-400"
+                    aria-hidden="true"
+                  />
+                </Menu.Button>
+              </div>
+              <Transition
+                as={Fragment}
+                enter="transition ease-out duration-100"
+                enterFrom="transform opacity-0 scale-95"
+                enterTo="transform opacity-100 scale-100"
+                leave="transition ease-in duration-75"
+                leaveFrom="transform opacity-100 scale-100"
+                leaveTo="transform opacity-0 scale-95"
+              >
+                <Menu.Items className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                  <div className="py-1">
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={() => navigate('/profile')}
+                          className={`${
+                            active ? "bg-gray-100 text-gray-900" : "text-gray-700"
+                          } group flex w-full items-center px-4 py-2 text-sm`}
+                        >
+                          <User className="mr-2 h-5 w-5" aria-hidden="true" />
+                          My Profile
+                        </button>
+                      )}
+                    </Menu.Item>
+                    <Menu.Item>
+                      {({ active }) => (
+                        <button
+                          onClick={handleLogout}
+                          className={`${
+                            active ? "bg-red-50 text-red-700" : "text-gray-700"
+                          } group flex w-full items-center px-4 py-2 text-sm`}
+                        >
+                          <LogOut className="mr-2 h-5 w-5" aria-hidden="true" />
+                          Logout
+                        </button>
+                      )}
+                    </Menu.Item>
+                  </div>
+                </Menu.Items>
+              </Transition>
+            </Menu>
+          </div>
+        </header>
+        
+        {/* --- NEW: MAIN CONTENT AREA --- */}
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-12">
+          
+          {/* Lobby Card (now centered within the 'main' container) */}
+          <div className="max-w-7xl mx-auto bg-white p-8 rounded-2xl shadow-xl w-full">
+            
             <div className="flex items-center gap-3 mb-6">
               <Users className="w-8 h-8 text-indigo-600" />
               <h2 className="text-3xl font-bold text-gray-900">Chat Lobby</h2>
@@ -574,9 +624,9 @@ const LobbyPage: React.FC = () => {
                         )}
                       </div>
 
-                      {/* ✅ BUG FIX: This div contains the mobile divider AND the desktop join form */}
+                      {/* This div contains the mobile divider AND the desktop join form */}
                       <div>
-                        {/* ✅ UI Fix 1: Mobile-only divider */}
+                        {/* Mobile-only divider */}
                         <div className="my-8 border-b border-gray-900 md:hidden" />
 
                         {/* Desktop-only vertical divider */}
@@ -617,7 +667,7 @@ const LobbyPage: React.FC = () => {
                           </form>
                         </div>
 
-                        {/* ✅ BUG FIX: Mobile-only Join Room Form */}
+                        {/* Mobile-only Join Room Form */}
                         <form className="md:hidden" onSubmit={handleJoinPrivateRoom}>
                           <h3 className="text-lg font-semibold text-gray-800 pb-2 mb-4 border-b border-gray-300">
                             Join a Private Room
@@ -659,7 +709,7 @@ const LobbyPage: React.FC = () => {
               )}
             </div>
           </div>
-        </div>
+        </main>
       </div>
 
       {/* Delete Modal */}

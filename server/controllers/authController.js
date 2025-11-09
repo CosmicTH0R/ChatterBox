@@ -80,3 +80,50 @@ export const loginUser = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// --- NEW FUNCTION ---
+
+/**
+ * @desc    Update user password
+ * @route   POST /api/auth/update-password
+ * @access  Private
+ */
+export const updatePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    // 1. Validate input
+    if (!oldPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Please provide both old and new passwords" });
+    }
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "New password must be at least 6 characters long" });
+    }
+
+    // 2. Find user (req.user.id comes from 'protect' middleware)
+    // We must select '+password' because the schema has 'select: false'
+    const user = await User.findById(req.user.id).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 3. Compare old password (using the same style as your loginUser)
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid old password" });
+    }
+
+    // 4. Set new password and save (pre-save hook will hash)
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: "Password updated successfully" });
+  } catch (err) {
+    console.error("Error in updatePassword:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

@@ -11,11 +11,33 @@ const UserSchema = new mongoose.Schema(
       trim: true,
       minlength: [3, "Username must be at least 3 characters long"],
     },
+    // --- ADDED THIS FIELD ---
+    email: {
+      type: String,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      match: [
+        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        "Please fill a valid email address",
+      ],
+    },
     password: {
       type: String,
       required: [true, "Password is required"],
       minlength: [6, "Password must be at least 6 characters long"],
       select: false, // exclude password from query results by default
+    },
+    // --- ADDED THIS FIELD ---
+    name: {
+      type: String,
+      trim: true,
+      default: "", // Good to have a default
+    },
+    // --- ADDED THIS FIELD ---
+    avatarUrl: {
+      type: String,
+      default: "", // Good to have a default
     },
   },
   { timestamps: true }
@@ -37,7 +59,9 @@ UserSchema.pre("save", async function (next) {
 
 // ✅ Instance method for password verification
 UserSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  // We need to fetch the password explicitly since it's 'select: false'
+  const user = await mongoose.model("User").findById(this._id).select('+password');
+  return await bcrypt.compare(enteredPassword, user.password);
 };
 
 // Export model
