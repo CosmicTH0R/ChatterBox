@@ -1,4 +1,3 @@
-// models/Message.js
 import mongoose from "mongoose";
 
 const messageSchema = new mongoose.Schema(
@@ -20,21 +19,28 @@ const messageSchema = new mongoose.Schema(
     room: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Room",
-      required: false, // <-- 1. SET TO FALSE
+      required: false,
     },
 
     // --- (START) PHASE 8: DM FIELDS ---
     isDM: {
       type: Boolean,
-      default: false, // <-- 2. ADDED THIS
+      default: false,
     },
     participants: [
       {
-        type: mongoose.Schema.Types.ObjectId, // <-- 3. ADDED THIS
+        type: mongoose.Schema.Types.ObjectId,
         ref: "User",
       },
     ],
     // --- (END) PHASE 8: DM FIELDS ---
+
+    // --- (START) PHASE 9: MODERATION ---
+    isEdited: {
+      type: Boolean,
+      default: false,
+    },
+    // --- (END) PHASE 9: MODERATION ---
   },
   { timestamps: false } // we already have timestamp field manually
 );
