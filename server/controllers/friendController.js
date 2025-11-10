@@ -1,5 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import User from '../models/User.js';
+import Message from '../models/Message.js'; // 1. IMPORT MESSAGE MODEL
+import mongoose from 'mongoose'; // 2. IMPORT MONGOOSE
 
 /**
  * @desc    Send a friend request
@@ -7,6 +9,7 @@ import User from '../models/User.js';
  * @access  Private
  */
 export const sendFriendRequest = asyncHandler(async (req, res) => {
+  // ... (your existing code is unchanged)
   const { username } = req.body;
   const senderId = req.user.id;
 
@@ -15,7 +18,6 @@ export const sendFriendRequest = asyncHandler(async (req, res) => {
     throw new Error('Please enter a username');
   }
 
-  // Find the target user by their username
   const targetUser = await User.findOne({ username });
 
   if (!targetUser) {
@@ -25,39 +27,32 @@ export const sendFriendRequest = asyncHandler(async (req, res) => {
 
   const targetUserId = targetUser._id;
 
-  // Check if trying to send a request to self
   if (senderId === targetUserId.toString()) {
     res.status(400);
     throw new Error('You cannot send a friend request to yourself');
   }
 
-  // Find the sender's user document to check existing relationships
   const senderUser = await User.findById(senderId);
 
-  // Check if they are already friends
   if (senderUser.friends.includes(targetUserId)) {
     res.status(400);
     throw new Error('You are already friends with this user');
   }
 
-  // Check if a request was already sent
   if (senderUser.sentFriendRequests.includes(targetUserId)) {
     res.status(400);
     throw new Error('Friend request already sent');
   }
 
-  // Check if a request was already received from this user
   if (senderUser.receivedFriendRequests.includes(targetUserId)) {
     res.status(400);
     throw new Error('This user has already sent you a friend request. Accept it from your requests.');
   }
 
-  // Update sender's sent requests
   await User.findByIdAndUpdate(senderId, {
     $addToSet: { sentFriendRequests: targetUserId },
   });
 
-  // Update target user's received requests
   await User.findByIdAndUpdate(targetUserId, {
     $addToSet: { receivedFriendRequests: senderId },
   });
@@ -71,7 +66,8 @@ export const sendFriendRequest = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const acceptFriendRequest = asyncHandler(async (req, res) => {
-  const { requestId } = req.body; // requestId is the ID of the user who sent the request
+  // ... (your existing code is unchanged)
+  const { requestId } = req.body; 
   const acceptorId = req.user.id;
 
   if (!requestId) {
@@ -79,7 +75,6 @@ export const acceptFriendRequest = asyncHandler(async (req, res) => {
     throw new Error('No request ID provided');
   }
 
-  // Find both users
   const acceptor = await User.findById(acceptorId);
   const sender = await User.findById(requestId);
 
@@ -88,23 +83,16 @@ export const acceptFriendRequest = asyncHandler(async (req, res) => {
     throw new Error('Sender not found');
   }
 
-  // Check if the request actually exists
   if (!acceptor.receivedFriendRequests.includes(requestId)) {
     res.status(400);
     throw new Error('No friend request found from this user');
   }
 
-  // --- Perform the transaction ---
-
-  // 1. Remove request from acceptor's received list
-  // 2. Add sender to acceptor's friends list
   await User.findByIdAndUpdate(acceptorId, {
     $pull: { receivedFriendRequests: requestId },
     $addToSet: { friends: requestId },
   });
 
-  // 1. Remove request from sender's sent list
-  // 2. Add acceptor to sender's friends list
   await User.findByIdAndUpdate(requestId, {
     $pull: { sentFriendRequests: acceptorId },
     $addToSet: { friends: acceptorId },
@@ -119,7 +107,8 @@ export const acceptFriendRequest = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const rejectFriendRequest = asyncHandler(async (req, res) => {
-  const { requestId } = req.body; // ID of the user who sent the request
+  // ... (your existing code is unchanged)
+  const { requestId } = req.body; 
   const rejectorId = req.user.id;
 
   if (!requestId) {
@@ -127,12 +116,10 @@ export const rejectFriendRequest = asyncHandler(async (req, res) => {
     throw new Error('No request ID provided');
   }
 
-  // Remove request from rejector's received list
   await User.findByIdAndUpdate(rejectorId, {
     $pull: { receivedFriendRequests: requestId },
   });
 
-  // Remove request from sender's sent list
   await User.findByIdAndUpdate(requestId, {
     $pull: { sentFriendRequests: rejectorId },
   });
@@ -146,6 +133,7 @@ export const rejectFriendRequest = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const removeFriend = asyncHandler(async (req, res) => {
+  // ... (your existing code is unchanged)
   const { friendId } = req.params;
   const removerId = req.user.id;
 
@@ -154,12 +142,10 @@ export const removeFriend = asyncHandler(async (req, res) => {
     throw new Error('No friend ID provided');
   }
 
-  // Remove friend from remover's friends list
   await User.findByIdAndUpdate(removerId, {
     $pull: { friends: friendId },
   });
 
-  // Remove remover from friend's friends list
   await User.findByIdAndUpdate(friendId, {
     $pull: { friends: removerId },
   });
@@ -173,12 +159,13 @@ export const removeFriend = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const getFriendsAndRequests = asyncHandler(async (req, res) => {
+  // ... (your existing code is unchanged)
   const userId = req.user.id;
 
   const user = await User.findById(userId)
     .populate({
       path: 'friends',
-      select: 'username name avatarUrl', // Only get these fields
+      select: 'username name avatarUrl', 
     })
     .populate({
       path: 'sentFriendRequests',
@@ -200,3 +187,89 @@ export const getFriendsAndRequests = asyncHandler(async (req, res) => {
     receivedRequests: user.receivedFriendRequests,
   });
 });
+
+// --- (START) 3. NEW FUNCTION FOR CONVERSATION LIST ---
+
+/**
+ * @desc    Get all DM conversations for a user
+ * @route   GET /api/friends/conversations
+ * @access  Private
+ */
+export const getConversations = asyncHandler(async (req, res) => {
+  const userId = new mongoose.Types.ObjectId(req.user.id);
+
+  const conversations = await Message.aggregate([
+    // 1. Find all DM messages involving the current user
+    {
+      $match: {
+        isDM: true,
+        participants: userId,
+      },
+    },
+    // 2. Sort by newest first to easily find the "last" message
+    {
+      $sort: {
+        timestamp: -1,
+      },
+    },
+    // 3. Add a field for "the other person" in the chat
+    {
+      $addFields: {
+        otherParticipant: {
+          $arrayElemAt: [
+            {
+              $filter: {
+                input: '$participants',
+                as: 'p',
+                cond: { $ne: ['$$p', userId] },
+              },
+            },
+            0,
+          ],
+        },
+      },
+    },
+    // 4. Group by "the other person", picking the $first (newest) message
+    {
+      $group: {
+        _id: '$otherParticipant',
+        lastMessage: { $first: '$$ROOT' },
+      },
+    },
+    // 5. Populate that "other person's" user details
+    {
+      $lookup: {
+        from: 'users', // The 'users' collection in MongoDB
+        localField: '_id',
+        foreignField: '_id',
+        as: 'withUser',
+      },
+    },
+    // 6. Deconstruct the 'withUser' array (it will only have one element)
+    {
+      $unwind: '$withUser',
+    },
+    // 7. Reshape the output to be clean for the frontend
+    {
+      $project: {
+        _id: 0, // Don't need the group _id
+        lastMessage: 1,
+        withUser: {
+          _id: '$withUser._id',
+          username: '$withUser.username',
+          name: '$withUser.name',
+          avatarUrl: '$withUser.avatarUrl',
+        },
+      },
+    },
+    // 8. Final sort to put the newest conversations at the top of the list
+    {
+      $sort: {
+        'lastMessage.timestamp': -1,
+      },
+    },
+  ]);
+
+  res.status(200).json(conversations);
+});
+// --- (END) NEW FUNCTION ---

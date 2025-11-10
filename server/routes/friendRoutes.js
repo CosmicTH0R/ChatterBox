@@ -5,6 +5,7 @@ import {
   rejectFriendRequest,
   removeFriend,
   getFriendsAndRequests,
+  getConversations, // <-- 1. Import the new function
 } from '../controllers/friendController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -16,6 +17,11 @@ router.use(protect);
 // GET /api/friends/all
 // Get all friends and pending/sent requests
 router.get('/all', getFriendsAndRequests);
+
+// --- 2. ADD NEW ROUTE ---
+// GET /api/friends/conversations
+// Get all DM conversations
+router.get('/conversations', getConversations);
 
 // POST /api/friends/send
 // Send a friend request

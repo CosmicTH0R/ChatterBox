@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Fragment } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom"; // <-- Removed Link
 import { toast, Toaster } from "react-hot-toast";
 import {
   Users,
@@ -16,6 +16,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Dialog, Transition } from "@headlessui/react";
+import UserInfoModal from "../components/UserInfoModal"; // <-- 1. IMPORT MODAL
 
 // --- INTERFACES ---
 interface Friend {
@@ -41,12 +42,9 @@ const FriendsPage: React.FC = () => {
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
   // --- STATE ---
-  const [activeTab, setActiveTab] = useState("all"); // 'all', 'pending', 'add'
+  const [activeTab, setActiveTab] = useState("all");
   const [friends, setFriends] = useState<Friend[]>([]);
   const [receivedRequests, setReceivedRequests] = useState<Request[]>([]);
-  // We fetch sentRequests to give feedback (e.g., "Request already sent")
-  const [sentRequests, setSentRequests] = useState<Request[]>([]);
-
   const [addUsername, setAddUsername] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,7 +53,11 @@ const FriendsPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [friendToRemove, setFriendToRemove] = useState<Friend | null>(null);
 
-  // --- 1. DATA FETCHING (GET /api/friends/all) ---
+  // --- 2. ADD NEW STATE FOR INFO MODAL ---
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+
+  // --- DATA FETCHING ---
   const fetchData = async () => {
     try {
       const { data } = await axios.get(`${API_URL}/api/friends/all`, {
@@ -63,7 +65,6 @@ const FriendsPage: React.FC = () => {
       });
       setFriends(data.friends || []);
       setReceivedRequests(data.receivedRequests || []);
-      setSentRequests(data.sentRequests || []);
     } catch (err) {
       console.error("Failed to fetch friends data", err);
       toast.error("Could not load your friends list.");
@@ -80,10 +81,9 @@ const FriendsPage: React.FC = () => {
     fetchData();
   }, [token, navigate]);
 
-  // --- 2. API HANDLERS (WIRED TO BUTTONS) ---
-
-  // POST /api/friends/send
+  // --- API HANDLERS (Unchanged) ---
   const handleSendRequest = async (e: React.FormEvent) => {
+    // ... (your existing code)
     e.preventDefault();
     if (!addUsername.trim()) {
       toast.error("Please enter a username.");
@@ -99,7 +99,7 @@ const FriendsPage: React.FC = () => {
       );
       toast.success(data.message, { id: toastId });
       setAddUsername("");
-      fetchData(); // Re-fetch to update sent requests list
+      fetchData(); 
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to send request.", {
         id: toastId,
@@ -109,9 +109,9 @@ const FriendsPage: React.FC = () => {
     }
   };
 
-  // POST /api/friends/accept
   const handleAcceptRequest = async (requestId: string) => {
-    const toastId = toast.loading("Accepting...");
+    // ... (your existing code)
+     const toastId = toast.loading("Accepting...");
     try {
       const { data } = await axios.post(
         `${API_URL}/api/friends/accept`,
@@ -119,7 +119,7 @@ const FriendsPage: React.FC = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success(data.message, { id: toastId });
-      fetchData(); // Re-fetch to update all lists
+      fetchData(); 
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to accept.", {
         id: toastId,
@@ -127,8 +127,8 @@ const FriendsPage: React.FC = () => {
     }
   };
 
-  // POST /api/friends/reject
   const handleRejectRequest = async (requestId: string) => {
+    // ... (your existing code)
     const toastId = toast.loading("Rejecting...");
     try {
       const { data } = await axios.post(
@@ -137,7 +137,7 @@ const FriendsPage: React.FC = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success(data.message, { id: toastId });
-      fetchData(); // Re-fetch to update received requests
+      fetchData(); 
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to reject.", {
         id: toastId,
@@ -145,8 +145,8 @@ const FriendsPage: React.FC = () => {
     }
   };
 
-  // DELETE /api/friends/:friendId
   const handleRemoveFriend = async () => {
+    // ... (your existing code)
     if (!friendToRemove) return;
     
     setIsSubmitting(true);
@@ -158,7 +158,7 @@ const FriendsPage: React.FC = () => {
       );
       toast.success(data.message, { id: toastId });
       closeModal();
-      fetchData(); // Re-fetch to update friends list
+      fetchData(); 
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to remove friend.", {
         id: toastId,
@@ -168,8 +168,9 @@ const FriendsPage: React.FC = () => {
     }
   };
 
-  // --- MODAL HANDLERS ---
-  const openModal = (friend: Friend) => {
+  // --- REMOVE FRIEND MODAL HANDLERS ---
+  const openModal = (e: React.MouseEvent, friend: Friend) => {
+    e.stopPropagation(); // Stop click from bubbling up to the modal opener
     setFriendToRemove(friend);
     setIsModalOpen(true);
   };
@@ -179,17 +180,29 @@ const FriendsPage: React.FC = () => {
     setFriendToRemove(null);
   };
 
-  // --- RENDER HELPER (UPDATED FOR FULL HEIGHT) ---
+  // --- 3. NEW INFO MODAL HANDLERS ---
+  const openInfoModal = (userId: string) => {
+    setSelectedUserId(userId);
+    setIsInfoModalOpen(true);
+  };
+
+  const closeInfoModal = () => {
+    setIsInfoModalOpen(false);
+    setSelectedUserId(null);
+  };
+
+  // --- RENDER HELPER ---
   const renderTabContent = () => {
     if (isLoading) {
-      return (
+      // ... (unchanged)
+       return (
         <div className="grow flex justify-center items-center h-full">
           <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
         </div>
       );
     }
 
-    // --- TAB 1: ALL FRIENDS ---
+    // --- 4. TAB 1: ALL FRIENDS (UPDATED) ---
     if (activeTab === "all") {
       return (
         <div className="grow flex flex-col">
@@ -200,7 +213,12 @@ const FriendsPage: React.FC = () => {
                   key={friend._id}
                   className="py-4 flex items-center justify-between"
                 >
-                  <div className="flex items-center gap-4">
+                  {/* Replaced Link with Button to open modal */}
+                  <button
+                    type="button"
+                    onClick={() => openInfoModal(friend._id)}
+                    className="flex items-center gap-4 grow hover:opacity-80 transition-opacity text-left"
+                  >
                     <img
                       src={friend.avatarUrl || DEFAULT_AVATAR}
                       alt={friend.username}
@@ -213,10 +231,11 @@ const FriendsPage: React.FC = () => {
                       </span>
                       <p className="text-sm text-gray-500">@{friend.username}</p>
                     </div>
-                  </div>
+                  </button>
+
                   <button
-                    onClick={() => openModal(friend)}
-                    className="p-2 rounded-lg text-red-600 hover:bg-red-100"
+                    onClick={(e) => openModal(e, friend)} // Pass event to stop propagation
+                    className="p-2 rounded-lg text-red-600 hover:bg-red-100 shrink-0 ml-4"
                     title="Remove friend"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -235,7 +254,7 @@ const FriendsPage: React.FC = () => {
       );
     }
 
-    // --- TAB 2: PENDING REQUESTS ---
+    // --- 5. TAB 2: PENDING REQUESTS (UPDATED) ---
     if (activeTab === "pending") {
       return (
         <div className="grow flex flex-col">
@@ -246,7 +265,12 @@ const FriendsPage: React.FC = () => {
                   key={req._id}
                   className="py-4 flex items-center justify-between"
                 >
-                  <div className="flex items-center gap-4">
+                  {/* Replaced div with Button to open modal */}
+                  <button
+                    type="button"
+                    onClick={() => openInfoModal(req._id)}
+                    className="flex items-center gap-4 grow hover:opacity-80 transition-opacity text-left"
+                  >
                     <img
                       src={req.avatarUrl || DEFAULT_AVATAR}
                       alt={req.username}
@@ -259,8 +283,8 @@ const FriendsPage: React.FC = () => {
                       </span>
                       <p className="text-sm text-gray-500">@{req.username}</p>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
+                  </button>
+                  <div className="flex gap-2 shrink-0 ml-4">
                     <button
                       onClick={() => handleAcceptRequest(req._id)}
                       className="p-2 rounded-lg text-green-600 hover:bg-green-100"
@@ -290,11 +314,12 @@ const FriendsPage: React.FC = () => {
       );
     }
 
-    // --- TAB 3: ADD FRIEND ---
+    // --- TAB 3: ADD FRIEND (Unchanged) ---
     if (activeTab === "add") {
       return (
         <form onSubmit={handleSendRequest} className="space-y-4 pt-4">
-          <div>
+         {/* ... (your existing form code) ... */}
+           <div>
             <label
               htmlFor="username"
               className="block text-sm font-semibold text-gray-700 mb-2"
@@ -332,14 +357,14 @@ const FriendsPage: React.FC = () => {
     return null;
   };
 
-  // --- RENDER (UPDATED FOR FULL HEIGHT) ---
+  // --- RENDER ---
   return (
     <>
       <Toaster position="top-center" />
-      {/* 1. This is now a flex column to fill the screen */}
       <div className="min-h-screen bg-gray-100 font-inter flex flex-col">
-        {/* Header (no changes) */}
+        {/* Header (unchanged) */}
         <header className="bg-white shadow-sm">
+          {/* ... (your existing header code) ... */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
             <div className="flex items-center space-x-2">
               <MessageSquareText className="w-8 h-8 text-indigo-600" />
@@ -357,8 +382,9 @@ const FriendsPage: React.FC = () => {
           </div>
         </header>
 
-        {/* 2. Page Content: now grows to fill space */}
+        {/* Page Content (unchanged) */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 grow flex flex-col w-full">
+          {/* ... (your existing main/title code) ... */}
           <div className="flex items-center gap-3 mb-6">
             <Users className="w-8 h-8 text-indigo-600" />
             <h2 className="text-3xl font-bold text-gray-900">
@@ -366,11 +392,11 @@ const FriendsPage: React.FC = () => {
             </h2>
           </div>
           
-          {/* 3. White Card: now grows to fill space */}
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col grow">
-            {/* Tab Navigation */}
+            {/* Tab Navigation (unchanged) */}
             <div className="flex border-b border-gray-200">
-              <button
+             {/* ... (your existing tab buttons) ... */}
+             <button
                 onClick={() => setActiveTab("all")}
                 className={`flex-1 py-4 text-center font-semibold flex justify-center items-center gap-2 ${
                   activeTab === "all"
@@ -415,7 +441,7 @@ const FriendsPage: React.FC = () => {
               </button>
             </div>
 
-            {/* 4. Tab Content: now grows and is a flex col */}
+            {/* Tab Content (unchanged) */}
             <div className="p-6 sm:p-8 grow flex flex-col">
               {renderTabContent()}
             </div>
@@ -423,9 +449,9 @@ const FriendsPage: React.FC = () => {
         </main>
       </div>
 
-      {/* Remove Friend Confirmation Modal (no changes) */}
+      {/* Remove Friend Confirmation Modal (unchanged) */}
       <Transition appear show={isModalOpen} as={Fragment}>
-        {/* ... (modal code is unchanged) ... */}
+        {/* ... (your existing modal code) ... */}
         <Dialog as="div" className="relative z-50" onClose={closeModal}>
           <Transition.Child
             as={Fragment}
@@ -501,6 +527,16 @@ const FriendsPage: React.FC = () => {
           </div>
         </Dialog>
       </Transition>
+
+      {/* --- 6. ADD THE NEW INFO MODAL --- */}
+      <UserInfoModal
+        isOpen={isInfoModalOpen}
+        onClose={closeInfoModal}
+        userId={selectedUserId}
+        onStatusChange={() => {
+          fetchData(); // Refetch friend data when status changes (e.g., accept/reject)
+        }}
+      />
     </>
   );
 };

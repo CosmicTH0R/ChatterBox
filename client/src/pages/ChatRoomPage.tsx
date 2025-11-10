@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
-import axios from "axios"; // Import axios to fetch room details
+import axios from "axios";
 import {
   ArrowLeft,
   Send,
@@ -10,53 +10,51 @@ import {
   Users,
   X,
   Clock,
-  Clipboard, // 1. Added Clipboard icon
+  Clipboard,
 } from "lucide-react";
 import { format } from "date-fns";
-import { toast, Toaster } from "react-hot-toast"; // 2. Added Toaster
+import { toast, Toaster } from "react-hot-toast";
+import UserInfoModal from "../components/UserInfoModal";
 
-/*
- * Matches the populated data from the backend.
- */
+// --- UPGRADED INTERFACES ---
+interface UserInfo {
+  _id: string;
+  username: string;
+  name?: string;
+  avatarUrl?: string;
+}
+
 interface Message {
-  _id: string | number; // Allow number for temporary pending ID
+  _id: string | number; 
   text: string;
   timestamp: string;
-  user: {
-    _id: string;
-    username: string;
-  };
-  isPending?: boolean; // For your optimistic UI
+  user: UserInfo; 
+  isPending?: boolean;
 }
+
+const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg";
 
 const ChatRoomPage: React.FC = () => {
   const navigate = useNavigate();
-  /**
-   * ✅ Task 4: Get roomId from URL params
-   */
   const { roomId } = useParams<{ roomId: string }>();
 
   const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  // --- 1. FIX: STATE NOW EXPECTS UserInfo OBJECTS ---
+  const [onlineUsers, setOnlineUsers] = useState<UserInfo[]>([]);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [isUserListOpen, setIsUserListOpen] = useState(false);
-
-  // 🔹 Bonus: Add state to hold the room name
   const [roomName, setRoomName] = useState("Loading room...");
-
-  /**
-   * ✅ Task 20: Add state for invite code
-   */
   const [inviteCode, setInviteCode] = useState<string | null>(null);
+
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Resolved build warning by hardcoding fallback
-  const SOCKET_URL =  import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const API_URL = import.meta.env.VITE_API_URL;
-
   const currentUser = localStorage.getItem("username");
   const token = localStorage.getItem("token");
 
@@ -67,46 +65,37 @@ const ChatRoomPage: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setText(e.target.value);
     if (!socket || !currentUser || !roomId) return;
-
-    /**
-     * ✅ Task 4: Emit 'typing' with roomId
-     */
     socket.emit("typing", { roomId, user: currentUser });
   };
 
-  // 🔹 Bonus: Fetch room details to get the name
+  // ... (useEffect for fetchRoomDetails is unchanged)
   useEffect(() => {
     if (!roomId || !token) return;
-
     const fetchRoomDetails = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/rooms/${roomId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setRoomName(res.data.name); // Set the room name from the API
+        setRoomName(res.data.name); 
       } catch (err) {
         console.error("Error fetching room details:", err);
         setRoomName("Private Room");
-        // Optionally navigate away if room not found
-        // navigate("/lobby");
       }
     };
     fetchRoomDetails();
   }, [roomId, token, API_URL, navigate]);
 
-  // Socket connection effect
+  // ... (useEffect for socket connection is unchanged)
   useEffect(() => {
     if (!token) {
       navigate("/login");
       return;
     }
-
     const newSocket = io(SOCKET_URL, {
       transports: ["websocket"],
       auth: { token },
     });
     setSocket(newSocket);
-
     return () => {
       newSocket.disconnect();
     };
@@ -114,14 +103,10 @@ const ChatRoomPage: React.FC = () => {
 
   // Socket event listeners effect
   useEffect(() => {
-    if (!socket || !roomId) return; // Must have socket and roomId
+    if (!socket || !roomId) return; 
 
-    /**
-     * ✅ Task 4: Emit 'joinRoom' with roomId
-     */
     socket.emit("joinRoom", { roomId });
 
-    // --- NEW LISTENERS FOR TASK 8 ---
     socket.on("loadHistory", (history: Message[]) => {
       setMessages(history);
     });
@@ -139,14 +124,11 @@ const ChatRoomPage: React.FC = () => {
       "messageConfirmed",
       (data: { tempId: string | number; savedMessage: Message }) => {
         const { tempId, savedMessage } = data;
-
         setMessages((prev) =>
           prev.map((msg) => (msg._id === tempId ? savedMessage : msg))
         );
       }
     );
-
-    // --- Other listeners ---
 
     socket.on("systemMessage", (msg) => {
       const systemMessage: Message = {
@@ -158,7 +140,8 @@ const ChatRoomPage: React.FC = () => {
       setMessages((prev) => [...prev, systemMessage]);
     });
 
-    socket.on("updateUserList", (userList: string[]) => {
+    // --- 2. FIX: LISTENER NOW EXPECTS UserInfo[] ---
+    socket.on("updateUserList", (userList: UserInfo[]) => {
       setOnlineUsers(userList);
     });
 
@@ -173,10 +156,6 @@ const ChatRoomPage: React.FC = () => {
       }, 2000);
     });
 
-    /**
-     * ✅ Task 20: Listen for room details
-     * (Sent by server only if user is the creator)
-     */
     socket.on("roomDetails", (details: { inviteCode: string }) => {
       if (details.inviteCode) {
         setInviteCode(details.inviteCode);
@@ -195,12 +174,12 @@ const ChatRoomPage: React.FC = () => {
       socket.off("systemMessage");
       socket.off("updateUserList");
       socket.off("userTyping");
-      socket.off("roomDetails"); // <-- Cleanup
+      socket.off("roomDetails");
       socket.off("connect_error");
     };
   }, [socket, roomId, currentUser]);
 
-  // Scroll to bottom effect
+  // ... (useEffect for scrollToBottom is unchanged)
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -213,17 +192,12 @@ const ChatRoomPage: React.FC = () => {
     setTypingUsers((prev) => prev.filter((u) => u !== currentUser));
   };
 
-  /**
-   * ✅ Task 21: Add Copy Invite function
-   */
   const copyInvite = () => {
+    // ... (unchanged)
     if (!inviteCode || !roomName) return;
     const inviteText = `Join my room "${roomName}" on Chatterbox! Code: ${inviteCode}`;
-
     navigator.clipboard.writeText(inviteText).then(
-      () => {
-        toast.success("Invite copied to clipboard!");
-      },
+      () => toast.success("Invite copied to clipboard!"),
       (err) => {
         console.error("Could not copy text: ", err);
         toast.error("Failed to copy invite.");
@@ -231,24 +205,51 @@ const ChatRoomPage: React.FC = () => {
     );
   };
 
+  const openInfoModal = (userId: string) => {
+    setSelectedUserId(userId);
+    setIsInfoModalOpen(true);
+  };
+
+  const closeInfoModal = () => {
+    setIsInfoModalOpen(false);
+    setSelectedUserId(null);
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
-      {/* 3. Added Toaster component */}
       <Toaster position="top-center" />
+      
+      <UserInfoModal
+        isOpen={isInfoModalOpen}
+        onClose={closeInfoModal}
+        userId={selectedUserId}
+        onStatusChange={() => {
+          // No refetch needed here, but the modal will update itself
+        }}
+      />
+      
       <div className="relative flex w-full max-w-7xl h-[90vh] bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* Sidebar Desktop */}
+        {/* --- 3. FIX: DESKTOP SIDEBAR --- */}
         <div className="hidden md:flex flex-col w-48 border-r border-gray-200 p-4 bg-gray-50">
           <h3 className="font-semibold text-gray-700 mb-2">Who's Online</h3>
           <ul className="space-y-2">
             {onlineUsers.map((user) => (
-              <li key={user} className="flex items-center gap-2 text-gray-900">
-                <span className="w-3 h-3 bg-green-500 rounded-full" /> {user}
+              <li key={user._id} className="flex items-center gap-2 text-gray-900 truncate">
+                <span className="w-3 h-3 bg-green-500 rounded-full shrink-0" />
+                {/* Now a clickable button */}
+                <button 
+                  onClick={() => openInfoModal(user._id)}
+                  className="truncate hover:underline"
+                  title={user.name || user.username}
+                >
+                  {user.name || user.username}
+                </button>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Mobile Drawer */}
+        {/* --- 4. FIX: MOBILE DRAWER --- */}
         {isUserListOpen && (
           <div
             onClick={() => setIsUserListOpen(false)}
@@ -271,8 +272,16 @@ const ChatRoomPage: React.FC = () => {
           </div>
           <ul className="space-y-2">
             {onlineUsers.map((user) => (
-              <li key={user} className="flex items-center gap-2 text-gray-900">
-                <span className="w-3 h-3 bg-green-500 rounded-full" /> {user}
+              <li key={user._id} className="flex items-center gap-2 text-gray-900 truncate">
+                <span className="w-3 h-3 bg-green-500 rounded-full shrink-0" />
+                {/* Also a clickable button here */}
+                 <button 
+                  onClick={() => openInfoModal(user._id)}
+                  className="truncate hover:underline"
+                  title={user.name || user.username}
+                >
+                  {user.name || user.username}
+                </button>
               </li>
             ))}
           </ul>
@@ -280,9 +289,9 @@ const ChatRoomPage: React.FC = () => {
 
         {/* Main Chat */}
         <div className="flex flex-col grow">
-          {/* Header */}
+          {/* Header (unchanged) */}
           <div className="relative flex flex-col items-center p-4 border-b bg-white z-10">
-            <div className="flex items-center justify-between w-full">
+             <div className="flex items-center justify-between w-full">
               <button
                 onClick={() => navigate("/lobby")}
                 className="flex items-center justify-center rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50 transition p-2 md:px-4 md:py-2"
@@ -293,21 +302,16 @@ const ChatRoomPage: React.FC = () => {
 
               <h2 className="text-xl font-bold text-gray-900">{roomName}</h2>
 
-              {/* Mobile Users Button */}
               <button
                 onClick={() => setIsUserListOpen(true)}
                 className="p-2 rounded-lg text-gray-700 hover:bg-gray-100 md:hidden"
               >
                 <Users className="w-5 h-5" />
               </button>
-
-              {/**
-               * ✅ Task 21: Add "Copy Invite" button for desktop
-               * Replaces the empty placeholder div
-               */}
+              
               <div
                 className="hidden md:flex justify-end"
-                style={{ width: "130px" }} // Give it space
+                style={{ width: "130px" }}
               >
                 {inviteCode && (
                   <button
@@ -322,7 +326,7 @@ const ChatRoomPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Typing Indicator */}
+            {/* Typing Indicator (Fixed) */}
             {typingUsers.length > 0 && (
               <div className="absolute bottom-0 text-sm text-gray-500 mt-1">
                 {typingUsers.length === 1
@@ -336,7 +340,7 @@ const ChatRoomPage: React.FC = () => {
             )}
           </div>
 
-          {/* Messages */}
+          {/* Messages (This was already correct from your last update) */}
           <div className="grow p-4 overflow-y-auto bg-gray-50 flex flex-col">
             <div className="space-y-4 grow">
               {messages.map((msg) => {
@@ -355,9 +359,19 @@ const ChatRoomPage: React.FC = () => {
                     }`}
                   >
                     {!isMine && !isSystem && (
-                      <span className="shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-indigo-500 text-white font-semibold">
-                        <User className="w-5 h-5" />
-                      </span>
+                      <button 
+                        type="button" 
+                        onClick={() => openInfoModal(msg.user._id)}
+                      >
+                        <img
+                          src={msg.user.avatarUrl || DEFAULT_AVATAR}
+                          alt={msg.user.username}
+                          className="shrink-0 w-10 h-10 rounded-full bg-gray-200 object-cover cursor-pointer hover:opacity-80"
+                          onError={(e) =>
+                            (e.currentTarget.src = DEFAULT_AVATAR)
+                          }
+                        />
+                      </button>
                     )}
 
                     {isSystem ? (
@@ -371,9 +385,13 @@ const ChatRoomPage: React.FC = () => {
                           isMine ? "items-end" : "items-start"
                         }`}
                       >
-                        <span className="text-sm font-bold text-gray-900 mb-1">
-                          {msg.user.username}
-                        </span>
+                        <button
+                          onClick={() => openInfoModal(msg.user._id)}
+                          className="text-sm font-bold text-gray-900 mb-1 hover:underline disabled:no-underline disabled:cursor-default"
+                          disabled={isMine} 
+                        >
+                          {msg.user.name || msg.user.username}
+                        </button>
 
                         <div
                           className={`relative px-4 py-3 rounded-lg shadow-md border whitespace-pre-wrap flex flex-row items-baseline ${
@@ -405,7 +423,7 @@ const ChatRoomPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Message Input */}
+          {/* Message Input (unchanged) */}
           <div className="p-4 bg-white border-t">
             <form onSubmit={sendMessage} className="flex gap-4 items-center">
               <input

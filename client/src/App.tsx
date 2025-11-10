@@ -6,13 +6,13 @@ import LobbyPage from "./pages/LobbyPage";
 import ChatRoomPage from "./pages/ChatRoomPage";
 import HomePage from "./pages/HomePage";
 import ProfilePage from "./pages/ProfilePage";
-import FriendsPage from "./pages/FriendsPage"; // <-- 1. Import FriendsPage
+import FriendsPage from "./pages/FriendsPage";
+import DirectMessagePage from "./pages/DirectMessagePage";
+import ConversationsPage from "./pages/ConversationsPage";
 
 const App: React.FC = () => {
   return (
-    // The "p-4" class here might add padding around your full-screen pages.
-    // Consider removing it if your pages (like Lobby/Profile) handle their own padding.
-    <div className="p-4"> 
+    <div className="p-4">
       <Router>
         <Routes>
           <Route path="/" element={<HomePage />} />
@@ -21,7 +21,10 @@ const App: React.FC = () => {
           <Route path="/lobby" element={<LobbyPage />} />
           <Route path="/room/:roomId" element={<ChatRoomPage />} />
           <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/friends" element={<FriendsPage />} /> {/* <-- 2. Add new route */}
+          <Route path="/friends" element={<FriendsPage />} />
+          <Route path="/dm/:friendId" element={<DirectMessagePage />} />
+          <Route path="/conversations" element={<ConversationsPage />} />
+
         </Routes>
       </Router>
     </div>

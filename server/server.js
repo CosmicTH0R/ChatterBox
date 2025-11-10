@@ -7,10 +7,11 @@ import jwt from 'jsonwebtoken';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import roomRoutes from './routes/roomRoutes.js';
-import userRoutes from './routes/userRoutes.js'; // <-- ADDED
+import userRoutes from './routes/userRoutes.js';
 import Message from './models/Message.js';
 import Room from './models/Room.js';
-import { notFound, errorHandler } from './middleware/errorMiddleware.js'; // <-- ADDED
+import User from './models/User.js'; // <-- 1. IMPORT USER MODEL
+import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import friendRoutes from './routes/friendRoutes.js';
 
 dotenv.config();
@@ -64,34 +65,50 @@ const io = new Server(server, {
   },
 });
 
-// ===================== SOCKET AUTH =====================
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (!token) return next(new Error('Authentication error: No token'));
-
+// ===================== 2. UPGRADED SOCKET AUTH =====================
+io.use(async (socket, next) => {
   try {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Authentication error: No token'));
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.data.username = decoded.username;
-    socket.data.userId = decoded.id;
+    if (!decoded.id)
+      return next(new Error('Authentication error: Invalid token payload'));
+
+    // Fetch user info to attach to socket
+    const user = await User.findById(decoded.id).select(
+      'username name avatarUrl'
+    );
+    if (!user) return next(new Error('Authentication error: User not found'));
+
+    // Attach all user data to the socket for this connection
+    socket.data.userId = user._id.toString();
+    socket.data.username = user.username;
+    socket.data.name = user.name || user.username; // Fallback to username if no name
+    socket.data.avatarUrl = user.avatarUrl || ''; // Default empty string
+
     next();
   } catch (err) {
-    return next(new Error('Authentication error: Invalid token'));
+    console.error('Socket auth error:', err.message);
+    return next(new Error('Authentication error'));
   }
 });
 
-// ===================== ROOM TRACKING =====================
-let roomUsers = {}; // { 'roomId': ['user1', 'user2'] }
+// ===================== 3. ROOM TRACKING (NOW STORES OBJECTS) =====================
+let roomUsers = {}; // { 'roomId': [{ _id, username, name, avatarUrl }, ...] }
 
 io.on('connection', (socket) => {
-  console.log('🟢 User connected:', socket.id);
+  // All this data is now available from the auth middleware
+  const { userId, username, name, avatarUrl } = socket.data;
 
-  let userRoomId = '';
-  const username = socket.data.username;
-  const userId = socket.data.userId; // Get userId from socket data
+  console.log(
+    `🟢 User connected: ${socket.id} - ${username} (${userId})`
+  );
+
+  let userRoomId = ''; // This is for public/private rooms
 
   /**
-   * ✅ TASK 7 & 19: JOIN ROOM (Modified)
-   * Loads history and sends invite code to creator.
+   * ✅ TASK 7 & 19: JOIN (Public/Private) ROOM
    */
   socket.on('joinRoom', async (data) => {
     const roomId = typeof data === 'string' ? data : data?.roomId;
@@ -103,86 +120,166 @@ io.on('connection', (socket) => {
     userRoomId = roomId;
     socket.join(roomId);
 
-    // 2. Find history (Task 7)
+    // 2. Find history
     try {
-      const history = await Message.find({ room: roomId })
+      const history = await Message.find({ room: roomId, isDM: false })
         .sort({ timestamp: 1 })
-        .populate('user', 'username');
+        .populate('user', 'username name avatarUrl');
 
-      // 3. Send history *only* to the connecting socket (Task 7)
       socket.emit('loadHistory', history);
     } catch (err) {
       console.error('Error fetching chat history:', err);
       socket.emit('error', 'Could not load chat history.');
     }
 
-    // --- ✅ Task 19: Send room details to creator ---
+    // --- Task 19: Send room details ---
     try {
       const room = await Room.findById(roomId);
-      
-      // Check if room exists and has a creator
+
       if (room && room.creator) {
-        // Check if the joining user is the creator
         if (room.creator.toString() === userId) {
-          // Send invite code *only* to the creator's socket
           socket.emit('roomDetails', { inviteCode: room.inviteCode });
         }
       }
     } catch (err) {
       console.error('Error fetching room details for creator:', err);
-      // Don't block joining, just log error
     }
 
-    // --- Keep existing join logic ---
+    // --- 4. MODIFIED USER LIST LOGIC (FIXES SIDEBAR) ---
+    const userInfo = {
+      _id: userId,
+      username,
+      name,
+      avatarUrl,
+    };
+
     if (!roomUsers[roomId]) roomUsers[roomId] = [];
-    if (!roomUsers[roomId].includes(username)) roomUsers[roomId].push(username);
+    // Check if user (by ID) is already in the list
+    if (!roomUsers[roomId].some((u) => u._id === userId)) {
+      roomUsers[roomId].push(userInfo);
+    }
 
     console.log(`👥 ${username} joined room ${roomId}`);
 
     socket.emit('systemMessage', `Welcome to the room!`);
     socket.to(roomId).emit('systemMessage', `👋 ${username} joined the chat.`);
 
+    // This now sends the full array of user objects
     io.to(roomId).emit('updateUserList', roomUsers[roomId]);
   });
 
-  // ===== SEND MESSAGE (ASYNC SAVE + INSTANT BROADCAST) =====
-  socket.on('sendMessage', async (data) => {
-    const { text, roomId } = data;
-
-    if (!text || !roomId || !userId) {
-      socket.emit('error', 'Invalid message data.');
-      return;
+  // --- JOIN DM ---
+  socket.on('joinDM', async (data) => {
+    const { friendId } = data;
+    if (!friendId) {
+      return socket.emit('error', 'Friend ID is required.');
     }
 
-    // 1️⃣ Broadcast instantly (non-blocking)
-    const tempMessage = {
-      _id: new Date().getTime(), // Temporary ID for frontend tracking
-      user: { _id: userId, username },
-      text,
-      room: roomId,
-      timestamp: new Date().toISOString(),
-      isPending: true,
-    };
-    io.to(roomId).emit('receiveMessage', tempMessage);
+    if (friendId === userId) {
+      return socket.emit('error', 'Cannot join a DM with yourself.');
+    }
 
-    // 2️⃣ Save in background
+    const dmRoomName = [userId, friendId].sort().join('_');
+    socket.join(dmRoomName);
+
+    console.log(`👥 ${username} joined DM: ${dmRoomName}`);
+
+    // Load DM history
     try {
-      const message = new Message({
+      const history = await Message.find({
+        isDM: true,
+        participants: { $all: [userId, friendId] },
+      })
+        .sort({ timestamp: 1 })
+        .populate('user', 'username name avatarUrl');
+
+      socket.emit('loadHistory', history);
+    } catch (err) {
+      console.error('Error fetching DM history:', err);
+      socket.emit('error', 'Could not load DM history.');
+    }
+  });
+
+  // --- SEND MESSAGE (FIXES CHAT FLICKER) ---
+  socket.on('sendMessage', async (data) => {
+    const { text, roomId, friendId } = data;
+
+    if (!text || !userId) {
+      return socket.emit('error', 'Invalid message data.');
+    }
+
+    // This object now has all the data it needs from socket.data
+    const tempUserObject = {
+      _id: userId,
+      username,
+      name,
+      avatarUrl,
+    };
+
+    // --- BRANCH 1: Public/Private Room Message ---
+    if (roomId) {
+      const tempMessage = {
+        _id: new Date().getTime(),
+        user: tempUserObject, // <-- This is now fully populated
         text,
         room: roomId,
-        user: userId,
-      });
-      const saved = await message.save();
-      const populated = await saved.populate('user', 'username');
+        timestamp: new Date().toISOString(),
+        isPending: true,
+      };
+      io.to(roomId).emit('receiveMessage', tempMessage);
 
-      // 3️⃣ Confirm save to clients
-      io.to(roomId).emit('messageConfirmed', {
-        tempId: tempMessage._id,
-        savedMessage: populated,
-      });
-    } catch (err) {
-      console.error('❌ Message save failed:', err.message);
-      socket.emit('error', 'Message could not be saved.');
+      try {
+        const message = new Message({
+          text,
+          room: roomId,
+          user: userId,
+          isDM: false,
+        });
+        const saved = await message.save();
+        const populated = await saved.populate('user', 'username name avatarUrl');
+
+        io.to(roomId).emit('messageConfirmed', {
+          tempId: tempMessage._id,
+          savedMessage: populated,
+        });
+      } catch (err) {
+        console.error('❌ Room Message save failed:', err.message);
+        socket.emit('error', 'Message could not be saved.');
+      }
+    }
+    // --- BRANCH 2: Direct Message (DM) ---
+    else if (friendId) {
+      const dmRoomName = [userId, friendId].sort().join('_');
+
+      const tempMessage = {
+        _id: new Date().getTime(),
+        user: tempUserObject, // <-- This is also fully populated
+        text,
+        isDM: true,
+        participants: [userId, friendId],
+        timestamp: new Date().toISOString(),
+        isPending: true,
+      };
+      io.to(dmRoomName).emit('receiveMessage', tempMessage);
+
+      try {
+        const message = new Message({
+          text,
+          user: userId,
+          isDM: true,
+          participants: [userId, friendId],
+        });
+        const saved = await message.save();
+        const populated = await saved.populate('user', 'username name avatarUrl');
+
+        io.to(dmRoomName).emit('messageConfirmed', {
+          tempId: tempMessage._id,
+          savedMessage: populated,
+        });
+      } catch (err) {
+        console.error('❌ DM save failed:', err.message);
+        socket.emit('error', 'DM could not be saved.');
+      }
     }
   });
 
@@ -192,14 +289,15 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('userTyping', user);
   });
 
-  // ===== DISCONNECT =====
+  // ===== 5. DISCONNECT (UPDATED FOR OBJECTS) =====
   socket.on('disconnect', () => {
     console.log('🔴 Disconnected:', socket.id);
 
     if (userRoomId && username) {
       if (roomUsers[userRoomId]) {
+        // Filter by user ID instead of username string
         roomUsers[userRoomId] = roomUsers[userRoomId].filter(
-          (u) => u !== username
+          (u) => u._id !== userId 
         );
         io.to(userRoomId).emit('updateUserList', roomUsers[userRoomId]);
       }
@@ -209,8 +307,8 @@ io.on('connection', (socket) => {
 });
 
 // ===================== ERROR HANDLING =====================
-app.use(notFound); // <-- ADDED
-app.use(errorHandler); // <-- ADDED
+app.use(notFound);
+app.use(errorHandler);
 
 // ===================== SERVER START =====================
 const PORT = process.env.PORT || 5000;
