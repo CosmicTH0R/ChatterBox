@@ -70,18 +70,29 @@ export const createRoom = async (req, res) => {
 };
 
 // ... (getRoomById is fine) ...
+
 export const getRoomById = async (req, res) => {
   try {
-    const room = await Room.findById(
+    // Fetch the room, selecting only the necessary fields.
+    // Using .lean() ensures we get a plain JavaScript object.
+    const roomDetails = await Room.findById(
       req.params.id,
-      "_id name creator"
-    ).populate("creator", "username email");
+      "name creator inviteCode"
+    ).lean();
 
-    if (!room) {
+    if (!roomDetails) {
       return res.status(404).json({ message: "Room not found" });
     }
 
-    res.status(200).json(room);
+    // Manually construct the response to ensure 'creator' is a plain string ID.
+    const responseData = {
+      _id: roomDetails._id.toString(),
+      name: roomDetails.name,
+      creator: roomDetails.creator.toString(), // <-- This is the fixed part
+      inviteCode: roomDetails.inviteCode || null,
+    };
+
+    res.status(200).json(responseData);
   } catch (err) {
     console.error("Error fetching room by ID:", err);
     res.status(500).json({ message: "Server error fetching room" });

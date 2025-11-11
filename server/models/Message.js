@@ -4,7 +4,7 @@ const messageSchema = new mongoose.Schema(
   {
     text: {
       type: String,
-      required: true,
+      required: false, // <-- 1. SET TO FALSE
       trim: true,
     },
     timestamp: {
@@ -41,6 +41,15 @@ const messageSchema = new mongoose.Schema(
       default: false,
     },
     // --- (END) PHASE 9: MODERATION ---
+
+    // --- (START) PHASE 10: RICH MEDIA ---
+    fileUrl: {
+      type: String, // <-- 2. ADDED
+    },
+    fileType: {
+      type: String, // <-- 3. ADDED (e.g., 'image', 'video', 'audio', 'file')
+    },
+    // --- (END) PHASE 10: RICH MEDIA ---
   },
   { timestamps: false } // we already have timestamp field manually
 );

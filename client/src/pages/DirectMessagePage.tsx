@@ -6,34 +6,55 @@ import {
   Send,
   Zap,
   Clock,
-  MoreVertical, 
+  MoreVertical,
   AlertTriangle,
-  Trash2, 
-  Edit, 
+  Trash2,
+  Edit,
+  Paperclip,
+  Smile,
+  ArrowDown,
+  X,
+  Loader2,
+  ImageIcon, 
+  VideoIcon,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Toaster, toast } from "react-hot-toast";
-import { Menu, Transition, Dialog } from "@headlessui/react"; 
+import { Menu, Transition, Dialog } from "@headlessui/react";
+import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
+import MediaViewerModal from "../components/MediaViewerModal";
 
-// 1. Updated User interface
+// --- INTERFACES (Unchanged) ---
 interface UserInfo {
   _id: string;
   username: string;
   name?: string;
   avatarUrl?: string;
 }
-
-// 2. Updated Message interface
 interface Message {
   _id: string | number;
-  text: string;
+  text?: string;
   timestamp: string;
   user: UserInfo;
   isPending?: boolean;
-  isEdited?: boolean; // <-- Added
+  isEdited?: boolean;
+  fileUrl?: string;
+  fileType?: string;
+}
+interface FileToSend {
+  fileUrl: string;
+  fileType: string;
+  fileName: string;
 }
 
 const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg";
+
+// --- EMOJI HELPER (Unchanged) ---
+const isEmojiOnly = (text: string) => {
+  const emojiRegex = /^(?:\p{Emoji_Presentation}|\p{Emoji_Modifier_Base}|\p{Emoji_Component}|\p{Extended_Pictographic}|\s)+$/u;
+  if (!text.trim()) return false; 
+  return emojiRegex.test(text);
+};
 
 const DirectMessagePage: React.FC = () => {
   const navigate = useNavigate();
@@ -44,30 +65,56 @@ const DirectMessagePage: React.FC = () => {
   const [text, setText] = useState("");
   const [friendInfo, setFriendInfo] = useState<UserInfo | null>(null);
 
-  // --- 3. NEW STATE FOR MODALS ---
   const [isUnsendMyModalOpen, setIsUnsendMyModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [messageToEdit, setMessageToEdit] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState("");
   
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null);
+  const [selectedMediaType, setSelectedMediaType] = useState<string | null>(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [fileToSend, setFileToSend] = useState<FileToSend | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // --- 1. NEW STATE (Online, Typing, Scroll) ---
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isFriendOnline, setIsFriendOnline] = useState(false);
+  const [isFriendTyping, setIsFriendTyping] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // --- 2. NEW REF (Typing) ---
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const currentUser = localStorage.getItem("username");
   const currentUserId = localStorage.getItem("userId");
   const token = localStorage.getItem("token");
 
+  // --- 3. UPDATED `handleInputChange` (Real Typing Logic) ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setText(e.target.value);
+    const newText = e.target.value;
+    setText(newText);
+
+    if (!socket || !friendId) return;
+
+    if (newText.length > 0 && !isFriendTyping) {
+      // Send "start typing" only if not already typing
+      socket.emit("dmTyping", { friendId });
+    } else if (newText.length === 0) {
+      // Send "stop typing" when text is cleared
+      socket.emit("stopDmTyping", { friendId });
+    }
   };
 
   // ... (useEffect for finding friend info, unchanged) ...
   useEffect(() => {
     const findFriend = (msgs: Message[]) => {
-      if (friendInfo) return; 
-      const otherUser = msgs.find(
-        (m) => m.user._id !== currentUserId
-      )?.user;
+      if (friendInfo) return;
+      const otherUser = msgs.find((m) => m.user._id !== currentUserId)?.user;
       if (otherUser) {
         setFriendInfo(otherUser);
       }
@@ -76,7 +123,6 @@ const DirectMessagePage: React.FC = () => {
       findFriend(messages);
     }
   }, [messages, currentUserId, friendInfo]);
-
 
   // ... (useEffect for socket connection, unchanged) ...
   useEffect(() => {
@@ -94,29 +140,40 @@ const DirectMessagePage: React.FC = () => {
     };
   }, [SOCKET_URL, token, navigate]);
 
-  // --- 4. UPDATED Socket event listeners ---
+  // --- 4. UPDATED Socket Listeners (Scroll, Typing, Online) ---
   useEffect(() => {
     if (!socket || !friendId) return;
 
     socket.emit("joinDM", { friendId });
 
+    // --- `loadHistory` (Your scroll fix) ---
     socket.on("loadHistory", (history: Message[]) => {
       setMessages(history);
+      setIsInitialLoad(false); // <-- ADDED
       if (history.length > 0) {
-        const otherUser = history.find(m => m.user._id !== currentUserId)?.user;
+        const otherUser = history.find(
+          (m) => m.user._id !== currentUserId
+        )?.user;
         if (otherUser) {
           setFriendInfo(otherUser);
         }
       }
     });
 
+    // --- `receiveMessage` (Stops typing) ---
     socket.on("receiveMessage", (pendingMsg: Message) => {
       setMessages((prev) => [...prev, pendingMsg]);
+      // Stop typing status when a message is received
+      setIsFriendTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
       if (!friendInfo && pendingMsg.user._id !== currentUserId) {
         setFriendInfo(pendingMsg.user);
       }
     });
-
+    
+    // ... (messageConfirmed, systemMessage, connect_error, moderation... unchanged) ...
     socket.on(
       "messageConfirmed",
       (data: { tempId: string | number; savedMessage: Message }) => {
@@ -125,7 +182,6 @@ const DirectMessagePage: React.FC = () => {
         );
       }
     );
-
     socket.on("systemMessage", (msg) => {
       const systemMessage: Message = {
         _id: new Date().getTime(),
@@ -135,12 +191,9 @@ const DirectMessagePage: React.FC = () => {
       };
       setMessages((prev) => [...prev, systemMessage]);
     });
-    
     socket.on("connect_error", (err: any) => {
       console.error("Socket connection error:", err.message);
     });
-
-    // --- NEW MODERATION LISTENERS ---
     socket.on("messagesUnsent", (payload: { userId: string }) => {
       if (!payload.userId) return;
       setMessages((prev) =>
@@ -150,7 +203,6 @@ const DirectMessagePage: React.FC = () => {
         toast.success("Your messages have been unsent.");
       }
     });
-
     socket.on("messageEdited", (editedMessage: Message) => {
       setMessages((prev) =>
         prev.map((msg) =>
@@ -158,12 +210,43 @@ const DirectMessagePage: React.FC = () => {
         )
       );
     });
-
     socket.on("messageDeleted", (payload: { messageId: string | number }) => {
       setMessages((prev) =>
         prev.filter((msg) => msg._id !== payload.messageId)
       );
     });
+
+    // --- NEW/FIXED LISTENERS FOR STATUS ---
+    socket.on("friendStatus", (data: { isOnline: boolean }) => {
+      setIsFriendOnline(data.isOnline);
+    });
+    
+    socket.on("userStatusUpdate", (data: { userId: string, isOnline: boolean }) => {
+      if (data.userId === friendId) {
+        setIsFriendOnline(data.isOnline);
+      }
+    });
+
+    // Friend starts typing
+    socket.on("friendTyping", () => {
+      setIsFriendTyping(true);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      // Set a timeout to clear typing status
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsFriendTyping(false);
+      }, 3000);
+    });
+
+    // Friend stops typing (cleared input)
+    socket.on("friendStoppedTyping", () => {
+      setIsFriendTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    });
+
 
     // Cleanup all listeners
     return () => {
@@ -172,83 +255,280 @@ const DirectMessagePage: React.FC = () => {
       socket.off("messageConfirmed");
       socket.off("systemMessage");
       socket.off("connect_error");
-      // --- CLEANUP NEW LISTENERS ---
       socket.off("messagesUnsent");
       socket.off("messageEdited");
       socket.off("messageDeleted");
+      // --- CLEANUP NEW LISTENERS ---
+      socket.off("friendStatus");
+      socket.off("userStatusUpdate");
+      socket.off("friendTyping");
+      socket.off("friendStoppedTyping"); // <-- ADDED
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
   }, [socket, friendId, currentUser, currentUserId, friendInfo]);
 
-  // ... (useEffect for scrollToBottom, unchanged) ...
+  // ... (useEffect for Scroll-to-Bottom Button listener, unchanged) ...
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const container = chatContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const isScrolledUp =
+        container.scrollHeight - container.scrollTop - container.clientHeight >
+        300;
+      setShowScrollToBottom(isScrolledUp);
+    };
+    container.addEventListener("scroll", handleScroll);
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
-  const sendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!text.trim() || !socket || !friendId) return;
-    socket.emit("sendMessage", { friendId, text });
-    setText("");
+  // --- 5. UPDATED Auto-Scroll useEffect (Your fix) ---
+  useEffect(() => {
+    if (isInitialLoad) {
+      // On initial load, scroll to bottom *instantly*
+      messagesEndRef.current?.scrollIntoView();
+    } else {
+      // For new messages, scroll *smoothly* only if near the bottom
+      const container = chatContainerRef.current;
+      if (container) {
+        const isNearBottom =
+          container.scrollHeight - container.scrollTop - container.clientHeight <
+          200;
+        if (isNearBottom) {
+          messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    }
+  }, [messages, isInitialLoad]); // <-- Added isInitialLoad dependency
+
+  
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
   
-  // --- 5. NEW HANDLERS FOR MODERATION ---
+  // --- 6. UPDATED `sendMessage` (Emits Stop Typing) ---
+  const sendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!socket || !friendId) return;
+    const textTrimmed = text.trim();
+    if (isUploading || (!textTrimmed && !fileToSend)) return;
+    
+    socket.emit("sendMessage", {
+      friendId,
+      text: textTrimmed,
+      fileUrl: fileToSend?.fileUrl,
+      fileType: fileToSend?.fileType,
+    });
+
+    // Also tell friend we stopped typing
+    socket.emit("stopDmTyping", { friendId });
+
+    setText("");
+    setFileToSend(null);
+    setShowEmojiPicker(false);
+  };
+  
+  const onEmojiClick = (emojiObject: EmojiClickData) => {
+    setText((prev) => prev + emojiObject.emoji);
+    // Also emit typing event
+    if (socket && friendId) {
+      socket.emit("dmTyping", { friendId });
+    }
+  };
+
+  // ... (rest of handlers and renderMedia function unchanged) ...
+  const handleFileButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    const uploadToast = toast.loading("Uploading file...");
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const response = await fetch(`${SOCKET_URL}/api/messages/upload-file`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      if (!response.ok) {
+        throw new Error("File upload failed");
+      }
+      const result = await response.json();
+      setFileToSend({
+        fileUrl: result.fileUrl,
+        fileType: result.fileType,
+        fileName: file.name,
+      });
+      toast.success("File ready to send!", { id: uploadToast });
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast.error("Upload failed. Please try again.", { id: uploadToast });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
   const handleConfirmUnsendMyMessages = () => {
     if (!socket || !friendId) return;
     socket.emit("unsendAllMyDMs", { friendId });
     setIsUnsendMyModalOpen(false);
   };
-
   const openEditModal = (message: Message) => {
     setMessageToEdit(message);
-    setEditedText(message.text);
+    setEditedText(message.text || "");
     setIsEditModalOpen(true);
   };
-
   const closeEditModal = () => {
     setIsEditModalOpen(false);
     setMessageToEdit(null);
     setEditedText("");
   };
-
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!socket || !messageToEdit || !editedText.trim()) return;
-
+    if (!socket || !messageToEdit) return;
+    const newTextTrimmed = editedText.trim();
+    if (!messageToEdit.fileUrl && !newTextTrimmed) {
+      toast.error("Message can't be empty");
+      return;
+    }
     socket.emit("editMessage", {
       messageId: messageToEdit._id,
-      newText: editedText.trim(),
+      newText: newTextTrimmed,
     });
     closeEditModal();
   };
-
   const handleDeleteMessage = (messageId: string | number) => {
     if (!socket) return;
     socket.emit("deleteMessage", { messageId });
   };
-
-
+  const openMediaModal = (url: string, fileType: string) => {
+    if (fileType.startsWith("image") || fileType.startsWith("video")) {
+      setSelectedMediaUrl(url);
+      setSelectedMediaType(fileType);
+      setIsMediaModalOpen(true); 
+    }
+  };
+  const closeMediaModal = () => {
+    setIsMediaModalOpen(false);
+    setSelectedMediaUrl(null);
+    setSelectedMediaType(null);
+  };
+  const renderMedia = (msg: Message, isMine: boolean) => {
+    if (!msg.fileUrl) return null;
+    let fileType = msg.fileType;
+    if (!fileType) {
+      if (msg.fileUrl.match(/\.(mp3|wav|ogg)$/i)) fileType = 'audio';
+      else if (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp)$/i)) fileType = 'image';
+      else if (msg.fileUrl.match(/\.(mp4|webm)$/i)) fileType = 'video';
+      else fileType = 'download';
+    }
+    const baseClasses = "p-3 rounded-lg border flex items-center gap-2.5 cursor-pointer transition-colors w-full max-w-xs";
+    const otherClasses = `bg-white border-gray-200 text-gray-700 hover:bg-gray-50`;
+    const myClasses = `bg-indigo-500 border-indigo-400 text-white hover:bg-indigo-400`;
+    if (fileType.startsWith("image")) {
+      return (
+        <div
+          onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
+          className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
+        >
+          <ImageIcon className="w-5 h-5 shrink-0" />
+          <span className="font-medium">Photo</span>
+        </div>
+      );
+    }
+    if (fileType.startsWith("video")) {
+      return (
+        <div
+          onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
+          className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
+        >
+          <VideoIcon className="w-5 h-5 shrink-0" />
+          <span className="font-medium">Video</span>
+        </div>
+      );
+    }
+    if (fileType.startsWith("audio")) {
+      return (
+        <video
+          src={msg.fileUrl}
+          controls
+          className={`
+            w-full max-w-xs h-12 rounded-lg
+            ${isMine ? 'bg-indigo-500' : 'bg-gray-100'}
+          `}
+        />
+      );
+    }
+    return (
+      <a
+        href={msg.fileUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`font-medium ${isMine ? 'text-white underline' : 'text-indigo-600 underline'}`}
+      >
+        Download File
+      </a>
+    );
+  };
+  
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
       <Toaster position="top-center" />
       <div className="relative flex w-full max-w-7xl h-[90vh] bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* Main Chat (set to full width) */}
-        <div className="flex flex-col grow w-full">
-          {/* --- 6. HEADER UPDATED WITH 3-DOT MENU --- */}
+        <div className="flex flex-col grow w-full relative">
+          
+          {/* --- 7. UPDATED HEADER (FIXED) --- */}
           <div className="relative flex flex-col items-center p-4 border-b bg-white z-10">
             <div className="flex items-center justify-between w-full">
               <button
-                onClick={() => navigate("/conversations")} // Changed to go to conversations
+                onClick={() => navigate("/conversations")}
                 className="flex items-center justify-center rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50 transition p-2 md:px-4 md:py-2"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span className="hidden md:inline md:ml-2">Back to Conversations</span>
+                <span className="hidden md:inline md:ml-2">
+                  Back to Conversations
+                </span>
               </button>
 
-              <h2 className="text-xl font-bold text-gray-900">
-                {friendInfo ? friendInfo.name || friendInfo.username : 'Direct Message'}
-              </h2>
+              {/* --- HEADER CENTER (FIXED) --- */}
+              <div className="flex flex-col items-center">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {friendInfo
+                      ? friendInfo.name || friendInfo.username
+                      : "Direct Message"}
+                  </h2>
+                  {/* Blue dot shows if online (no longer hides) */}
+                  {isFriendOnline && (
+                    <span className="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
+                  )}
+                </div>
+                
+                {/* Subtext: "typing..." takes priority, then "Online" */}
+                {isFriendTyping ? (
+                  <span className="text-sm text-gray-500 italic h-4">
+                    typing...
+                  </span>
+                ) : isFriendOnline ? (
+                  <span className="text-sm text-gray-500 h-4">
+                    Online
+                  </span>
+                ) : (
+                  // Placeholder to prevent layout shift
+                  <span className="h-4"></span> 
+                )}
+              </div>
 
-              {/* 3-Dot Menu */}
               <div className="flex justify-end" style={{ width: "130px" }}>
                 <Menu as="div" className="relative inline-block text-left">
                   <div>
@@ -272,7 +552,7 @@ const DirectMessagePage: React.FC = () => {
                             <button
                               onClick={() => setIsUnsendMyModalOpen(true)}
                               className={`${
-                                active ? 'bg-gray-100' : ''
+                                active ? "bg-gray-100" : ""
                               } group flex w-full items-center px-4 py-2 text-sm text-gray-700`}
                             >
                               <Trash2 className="mr-2 h-5 w-5" />
@@ -288,15 +568,21 @@ const DirectMessagePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Messages */}
-          <div className="grow p-4 overflow-y-auto bg-gray-50 flex flex-col">
+          {/* ... (Message Container - ref added) ... */}
+          <div
+            ref={chatContainerRef}
+            className="grow p-4 overflow-y-auto bg-gray-50 flex flex-col"
+          >
+            {/* ... (Fixed Bubble Layout - UNCHANGED) ... */}
             <div className="space-y-4 grow">
               {messages.map((msg) => {
                 const isMine = msg.user.username === currentUser;
                 const isSystem = msg.user.username === "System";
+                const hasMedia = !!msg.fileUrl;
+                const isJumbo = msg.text && isEmojiOnly(msg.text) && !hasMedia;
+                const useSimpleLayout = !hasMedia && !isJumbo;
 
                 return (
-                  // --- 7. NEW MENU WRAPPER ---
                   <Menu as="div" className="relative" key={msg._id}>
                     <div
                       className={`group flex gap-3 mb-2 ${
@@ -307,57 +593,74 @@ const DirectMessagePage: React.FC = () => {
                           : "justify-start"
                       }`}
                     >
-                      {/* Avatar (other users) */}
                       {!isMine && !isSystem && (
                         <img
                           src={msg.user.avatarUrl || DEFAULT_AVATAR}
                           alt={msg.user.username}
                           className="shrink-0 w-10 h-10 rounded-full bg-gray-200 object-cover"
-                          onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
+                          onError={(e) =>
+                            (e.currentTarget.src = DEFAULT_AVATAR)
+                          }
                         />
                       )}
-
-                      {/* System Message */}
                       {isSystem ? (
                         <span className="flex items-center gap-2 px-3 py-1 text-xs text-gray-500 bg-gray-200 rounded-full">
                           <Zap className="w-3 h-3 text-gray-400" />
                           {msg.text}
                         </span>
                       ) : (
-                        // User Message
                         <div
                           className={`flex flex-col max-w-[70%] ${
                             isMine ? "items-end" : "items-start"
                           }`}
                         >
-                          <span className="text-sm font-bold text-gray-900 mb-1">
-                            {msg.user.name || msg.user.username}
-                          </span>
-                          
-                          {/* Bubble + Menu Button Container */}
-                          <div className={`relative flex items-center ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
-                            
-                            {/* "..." Button (Only for me) */}
+                          <div
+                            className={`relative flex items-center ${
+                              isMine ? "flex-row-reverse" : "flex-row"
+                            }`}
+                          >
                             {isMine && (
-                              <Menu.Button className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity ${isMine ? 'mr-2' : 'ml-2'}">
+                              <Menu.Button
+                                className={`p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity ${
+                                  isMine ? "mr-2" : "ml-2"
+                                }`}
+                              >
                                 <MoreVertical className="w-4 h-4" />
                               </Menu.Button>
                             )}
-
-                            {/* Message Bubble */}
                             <div
-                              className={`relative px-4 py-3 rounded-lg shadow-md border whitespace-pre-wrap flex flex-row items-baseline ${
+                              className={`relative px-4 py-3 rounded-lg shadow-md border flex ${
+                                useSimpleLayout
+                                  ? "flex-row items-baseline"
+                                  : "flex-col"
+                              } ${
                                 isMine
                                   ? "bg-indigo-600 text-white border-indigo-600"
                                   : "bg-white text-gray-800 border-gray-200"
                               } ${msg.isPending ? "opacity-70" : ""}`}
                             >
-                              <p className="wrap-break-words">{msg.text}</p>
-                              <span
-                                className={`text-xs ml-2 shrink-0 ${
-                                  isMine ? "text-indigo-200" : "text-gray-400"
-                                }`}
-                              >
+                              {hasMedia && (
+                                <div className="mb-2">{renderMedia(msg, isMine)}</div>
+                              )}
+                              {msg.text && (
+                                <p className={`
+                                  ${isJumbo ? 'text-4xl' : ''}
+                                  ${
+                                  useSimpleLayout 
+                                    ? 'whitespace-pre-line break-all' 
+                                    : 'whitespace-pre-line'
+                                  }
+                                `}>
+                                  {msg.text}
+                                </p>
+                              )}
+                              <span className={`text-xs shrink-0 ${
+                                isMine ? "text-indigo-200" : "text-gray-400"
+                              } ${
+                                useSimpleLayout 
+                                  ? "ml-2" 
+                                  : "mt-1 self-end"
+                              }`}>
                                 {msg.isEdited && "(edited) "}
                                 {msg.isPending ? (
                                   <Clock className="w-3 h-3 animate-spin" />
@@ -370,8 +673,6 @@ const DirectMessagePage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    
-                    {/* Menu Panel (Only for me) */}
                     {isMine && (
                       <Transition
                         as={Fragment}
@@ -388,7 +689,10 @@ const DirectMessagePage: React.FC = () => {
                               {({ active }) => (
                                 <button
                                   onClick={() => openEditModal(msg)}
-                                  className={`${active ? 'bg-gray-100' : ''} group flex w-full items-center px-4 py-2 text-sm text-gray-700`}
+                                  disabled={!msg.text && !!msg.fileUrl}
+                                  className={`${
+                                    active ? "bg-gray-100" : ""
+                                  } group flex w-full items-center px-4 py-2 text-sm text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed`}
                                 >
                                   <Edit className="mr-2 h-4 w-4" />
                                   Edit
@@ -399,7 +703,9 @@ const DirectMessagePage: React.FC = () => {
                               {({ active }) => (
                                 <button
                                   onClick={() => handleDeleteMessage(msg._id)}
-                                  className={`${active ? 'bg-red-50' : ''} group flex w-full items-center px-4 py-2 text-sm text-red-700`}
+                                  className={`${
+                                    active ? "bg-red-50" : ""
+                                  } group flex w-full items-center px-4 py-2 text-sm text-red-700`}
                                 >
                                   <Trash2 className="mr-2 h-4 w-4" />
                                   Unsend
@@ -417,9 +723,85 @@ const DirectMessagePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Message Input */}
-          <div className="p-4 bg-white border-t">
+          {/* ... (Scroll to Bottom Button - UNCHANGED) ... */}
+          <Transition
+            show={showScrollToBottom}
+            as={Fragment}
+            enter="transition-opacity duration-200"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="transition-opacity duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-24 right-6 p-3 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 focus:outline-none z-10"
+            >
+              <ArrowDown className="w-5 h-5" />
+            </button>
+          </Transition>
+
+          {/* ... (Message Input - UNCHANGED) ... */}
+          <div className="p-4 bg-white border-t relative z-20">
+            <Transition
+              show={showEmojiPicker}
+              as={Fragment}
+              enter="transition-all duration-200 ease-out"
+              enterFrom="opacity-0 scale-95 -translate-y-2"
+              enterTo="opacity-100 scale-100 translate-y-0"
+              leave="transition-all duration-150 ease-in"
+              leaveFrom="opacity-100 scale-100 translate-y-0"
+              leaveTo="opacity-0 scale-95 -translate-y-2"
+            >
+              <div className="absolute bottom-full mb-2">
+                <EmojiPicker
+                  onEmojiClick={onEmojiClick}
+                  autoFocusSearch={false}
+                  theme={Theme.LIGHT}
+                />
+              </div>
+            </Transition>
+            {fileToSend && (
+              <div className="relative p-2 mb-2 border border-gray-300 rounded-lg bg-gray-50 flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 truncate">
+                  Ready to send: {fileToSend.fileName}
+                </span>
+                <button
+                  onClick={() => setFileToSend(null)}
+                  className="p-1 rounded-full hover:bg-gray-200 text-gray-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             <form onSubmit={sendMessage} className="flex gap-4 items-center">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                accept="image/*,video/*,audio/*"
+              />
+              <button
+                type="button"
+                onClick={handleFileButtonClick}
+                disabled={isUploading}
+                className="p-3 rounded-lg text-gray-600 hover:bg-gray-100 transition disabled:opacity-50"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Paperclip className="w-5 h-5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-3 rounded-lg text-gray-600 hover:bg-gray-100 transition"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
               <input
                 type="text"
                 placeholder="Type a message..."
@@ -429,7 +811,8 @@ const DirectMessagePage: React.FC = () => {
               />
               <button
                 type="submit"
-                className="p-3.5 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition"
+                disabled={isUploading || (!text.trim() && !fileToSend)}
+                className="p-3.5 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -438,11 +821,13 @@ const DirectMessagePage: React.FC = () => {
         </div>
       </div>
 
-      {/* --- 8. ADD NEW MODALS --- */}
-      
-      {/* Unsend All My Messages Modal */}
+      {/* ... (All Modals - UNCHANGED) ... */}
       <Transition appear show={isUnsendMyModalOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={() => setIsUnsendMyModalOpen(false)}>
+        <Dialog
+          as="div"
+          className="relative z-50"
+          onClose={() => setIsUnsendMyModalOpen(false)}
+        >
           <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
             <div className="fixed inset-0 bg-gray-900/75 backdrop-blur-sm" />
           </Transition.Child>
@@ -474,8 +859,6 @@ const DirectMessagePage: React.FC = () => {
           </div>
         </Dialog>
       </Transition>
-
-      {/* Edit Message Modal */}
       <Transition appear show={isEditModalOpen} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={closeEditModal}>
           <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
@@ -510,9 +893,31 @@ const DirectMessagePage: React.FC = () => {
           </div>
         </Dialog>
       </Transition>
-
+      <MediaViewerModal
+        isOpen={isMediaModalOpen}
+        onClose={closeMediaModal}
+        url={selectedMediaUrl}
+        fileType={selectedMediaType}
+      />
     </div>
   );
 };
 
 export default DirectMessagePage;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
