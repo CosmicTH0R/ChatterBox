@@ -92,7 +92,7 @@ const ConversationsPage: React.FC = () => {
   const renderContent = () => {
     if (isLoading) {
       return (
-        <div className="flex-grow flex justify-center items-center h-full">
+        <div className="grow flex justify-center items-center h-full">
           <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
         </div>
       );
@@ -100,7 +100,7 @@ const ConversationsPage: React.FC = () => {
 
     if (conversations.length === 0) {
       return (
-        <div className="flex-grow flex flex-col items-center justify-center h-full p-6 text-center">
+        <div className="grow flex flex-col items-center justify-center h-full p-6 text-center">
           <MessageSquare className="w-16 h-16 text-gray-300" />
           <h3 className="mt-4 text-xl font-semibold text-gray-800">No conversations yet</h3>
           <p className="mt-2 text-gray-500">

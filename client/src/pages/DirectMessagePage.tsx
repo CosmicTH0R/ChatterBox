@@ -15,14 +15,18 @@ import {
   ArrowDown,
   X,
   Loader2,
-  ImageIcon, 
+  ImageIcon,
   VideoIcon,
+  Camera,
+  Mic,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Toaster, toast } from "react-hot-toast";
 import { Menu, Transition, Dialog } from "@headlessui/react";
 import EmojiPicker, { type EmojiClickData, Theme } from "emoji-picker-react";
 import MediaViewerModal from "../components/MediaViewerModal";
+import axios from "axios";
+import CustomAudioPlayer from "../components/CustomAudioPlayer";
 
 // --- INTERFACES (Unchanged) ---
 interface UserInfo {
@@ -51,8 +55,9 @@ const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg";
 
 // --- EMOJI HELPER (Unchanged) ---
 const isEmojiOnly = (text: string) => {
-  const emojiRegex = /^(?:\p{Emoji_Presentation}|\p{Emoji_Modifier_Base}|\p{Emoji_Component}|\p{Extended_Pictographic}|\s)+$/u;
-  if (!text.trim()) return false; 
+  const emojiRegex =
+    /^(?:\p{Emoji_Presentation}|\p{Emoji_Modifier_Base}|\p{Emoji_Component}|\p{Extended_Pictographic}|\s)+$/u;
+  if (!text.trim()) return false;
   return emojiRegex.test(text);
 };
 
@@ -69,14 +74,17 @@ const DirectMessagePage: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [messageToEdit, setMessageToEdit] = useState<Message | null>(null);
   const [editedText, setEditedText] = useState("");
-  
+
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
   const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null);
-  const [selectedMediaType, setSelectedMediaType] = useState<string | null>(null);
+  const [selectedMediaType, setSelectedMediaType] = useState<string | null>(
+    null
+  );
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [fileToSend, setFileToSend] = useState<FileToSend | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   // --- 1. NEW STATE (Online, Typing, Scroll) ---
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -88,8 +96,12 @@ const DirectMessagePage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // --- 2. NEW REF (Typing) ---
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fileInputCameraRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const SOCKET_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
   const currentUser = localStorage.getItem("username");
   const currentUserId = localStorage.getItem("userId");
   const token = localStorage.getItem("token");
@@ -172,7 +184,7 @@ const DirectMessagePage: React.FC = () => {
         setFriendInfo(pendingMsg.user);
       }
     });
-    
+
     // ... (messageConfirmed, systemMessage, connect_error, moderation... unchanged) ...
     socket.on(
       "messageConfirmed",
@@ -205,9 +217,7 @@ const DirectMessagePage: React.FC = () => {
     });
     socket.on("messageEdited", (editedMessage: Message) => {
       setMessages((prev) =>
-        prev.map((msg) =>
-          msg._id === editedMessage._id ? editedMessage : msg
-        )
+        prev.map((msg) => (msg._id === editedMessage._id ? editedMessage : msg))
       );
     });
     socket.on("messageDeleted", (payload: { messageId: string | number }) => {
@@ -220,12 +230,15 @@ const DirectMessagePage: React.FC = () => {
     socket.on("friendStatus", (data: { isOnline: boolean }) => {
       setIsFriendOnline(data.isOnline);
     });
-    
-    socket.on("userStatusUpdate", (data: { userId: string, isOnline: boolean }) => {
-      if (data.userId === friendId) {
-        setIsFriendOnline(data.isOnline);
+
+    socket.on(
+      "userStatusUpdate",
+      (data: { userId: string; isOnline: boolean }) => {
+        if (data.userId === friendId) {
+          setIsFriendOnline(data.isOnline);
+        }
       }
-    });
+    );
 
     // Friend starts typing
     socket.on("friendTyping", () => {
@@ -246,7 +259,6 @@ const DirectMessagePage: React.FC = () => {
         clearTimeout(typingTimeoutRef.current);
       }
     });
-
 
     // Cleanup all listeners
     return () => {
@@ -295,7 +307,9 @@ const DirectMessagePage: React.FC = () => {
       const container = chatContainerRef.current;
       if (container) {
         const isNearBottom =
-          container.scrollHeight - container.scrollTop - container.clientHeight <
+          container.scrollHeight -
+            container.scrollTop -
+            container.clientHeight <
           200;
         if (isNearBottom) {
           messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -304,18 +318,23 @@ const DirectMessagePage: React.FC = () => {
     }
   }, [messages, isInitialLoad]); // <-- Added isInitialLoad dependency
 
-  
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
-  
+
   // --- 6. UPDATED `sendMessage` (Emits Stop Typing) ---
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!socket || !friendId) return;
     const textTrimmed = text.trim();
     if (isUploading || (!textTrimmed && !fileToSend)) return;
-    
+
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+      toast.dismiss(); // Dismiss the "Recording..." toast
+    }
+
     socket.emit("sendMessage", {
       friendId,
       text: textTrimmed,
@@ -330,7 +349,7 @@ const DirectMessagePage: React.FC = () => {
     setFileToSend(null);
     setShowEmojiPicker(false);
   };
-  
+
   const onEmojiClick = (emojiObject: EmojiClickData) => {
     setText((prev) => prev + emojiObject.emoji);
     // Also emit typing event
@@ -345,37 +364,47 @@ const DirectMessagePage: React.FC = () => {
   };
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !socket) return;
+
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error("File is too large (Max 25MB).");
+      return;
+    }
+
     setIsUploading(true);
-    const uploadToast = toast.loading("Uploading file...");
+    setFileToSend(null);
+    const toastId = toast.loading("Uploading file...");
+
     const formData = new FormData();
     formData.append("file", file);
+
     try {
-      const response = await fetch(`${SOCKET_URL}/api/messages/upload-file`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-      if (!response.ok) {
-        throw new Error("File upload failed");
-      }
-      const result = await response.json();
+      const { data } = await axios.post(
+        `${API_URL}/api/messages/upload-file`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
       setFileToSend({
-        fileUrl: result.fileUrl,
-        fileType: result.fileType,
+        fileUrl: data.fileUrl,
+        fileType: data.fileType,
         fileName: file.name,
       });
-      toast.success("File ready to send!", { id: uploadToast });
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error("Upload failed. Please try again.", { id: uploadToast });
+
+      toast.success("File ready to send!", { id: toastId });
+    } catch (err: any) {
+      console.error("File upload error:", err);
+      toast.error(err.response?.data?.message || "File upload failed.", {
+        id: toastId,
+      });
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (e.target) e.target.value = "";
     }
   };
   const handleConfirmUnsendMyMessages = () => {
@@ -415,7 +444,7 @@ const DirectMessagePage: React.FC = () => {
     if (fileType.startsWith("image") || fileType.startsWith("video")) {
       setSelectedMediaUrl(url);
       setSelectedMediaType(fileType);
-      setIsMediaModalOpen(true); 
+      setIsMediaModalOpen(true);
     }
   };
   const closeMediaModal = () => {
@@ -423,18 +452,85 @@ const DirectMessagePage: React.FC = () => {
     setSelectedMediaUrl(null);
     setSelectedMediaType(null);
   };
+  // const renderMedia = (msg: Message, isMine: boolean) => {
+  //   if (!msg.fileUrl) return null;
+  //   let fileType = msg.fileType;
+  //   if (!fileType) {
+  //     if (msg.fileUrl.match(/\.(mp3|wav|ogg)$/i)) fileType = "audio";
+  //     else if (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp)$/i))
+  //       fileType = "image";
+  //     else if (msg.fileUrl.match(/\.(mp4|webm)$/i)) fileType = "video";
+  //     else fileType = "download";
+  //   }
+  //   const baseClasses =
+  //     "p-3 rounded-lg border flex items-center gap-2.5 cursor-pointer transition-colors w-full max-w-xs";
+  //   const otherClasses = `bg-white border-gray-200 text-gray-700 hover:bg-gray-50`;
+  //   const myClasses = `bg-indigo-500 border-indigo-400 text-white hover:bg-indigo-400`;
+  //   if (fileType.startsWith("image")) {
+  //     return (
+  //       <div
+  //         onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
+  //         className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
+  //       >
+  //         <ImageIcon className="w-5 h-5 shrink-0" />
+  //         <span className="font-medium">Photo</span>
+  //       </div>
+  //     );
+  //   }
+  //   if (fileType.startsWith("video")) {
+  //     return (
+  //       <div
+  //         onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
+  //         className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
+  //       >
+  //         <VideoIcon className="w-5 h-5 shrink-0" />
+  //         <span className="font-medium">Video</span>
+  //       </div>
+  //     );
+  //   }
+  //   if (fileType.startsWith("audio")) {
+  //     return (
+  //       <video
+  //         src={msg.fileUrl}
+  //         controls
+  //         className={`
+  //           w-full max-w-xs h-12 rounded-lg
+  //           ${isMine ? "bg-indigo-500" : "bg-gray-100"}
+  //         `}
+  //       />
+  //     );
+  //   }
+  //   return (
+  //     <a
+  //       href={msg.fileUrl}
+  //       target="_blank"
+  //       rel="noopener noreferrer"
+  //       className={`font-medium ${
+  //         isMine ? "text-white underline" : "text-indigo-600 underline"
+  //       }`}
+  //     >
+  //       Download File
+  //     </a>
+  //   );
+  // };
+
+// --- renderMedia Function (Updated) ---
   const renderMedia = (msg: Message, isMine: boolean) => {
     if (!msg.fileUrl) return null;
+
     let fileType = msg.fileType;
     if (!fileType) {
-      if (msg.fileUrl.match(/\.(mp3|wav|ogg)$/i)) fileType = 'audio';
+      if (msg.fileUrl.match(/\.(mp3|wav|ogg|webm)$/i)) fileType = 'audio';
       else if (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp)$/i)) fileType = 'image';
       else if (msg.fileUrl.match(/\.(mp4|webm)$/i)) fileType = 'video';
       else fileType = 'download';
     }
+
+    // Base classes for other media types (image/video link placeholders)
     const baseClasses = "p-3 rounded-lg border flex items-center gap-2.5 cursor-pointer transition-colors w-full max-w-xs";
     const otherClasses = `bg-white border-gray-200 text-gray-700 hover:bg-gray-50`;
     const myClasses = `bg-indigo-500 border-indigo-400 text-white hover:bg-indigo-400`;
+
     if (fileType.startsWith("image")) {
       return (
         <div
@@ -446,6 +542,7 @@ const DirectMessagePage: React.FC = () => {
         </div>
       );
     }
+
     if (fileType.startsWith("video")) {
       return (
         <div
@@ -457,18 +554,19 @@ const DirectMessagePage: React.FC = () => {
         </div>
       );
     }
+
+    // --- THIS IS THE CHANGE ---
     if (fileType.startsWith("audio")) {
       return (
-        <video
+        <CustomAudioPlayer
           src={msg.fileUrl}
-          controls
-          className={`
-            w-full max-w-xs h-12 rounded-lg
-            ${isMine ? 'bg-indigo-500' : 'bg-gray-100'}
-          `}
+          isMine={isMine}
         />
       );
     }
+    // --- END OF CHANGE ---
+
+    // Default case for 'download' fileType or unrecognized formats
     return (
       <a
         href={msg.fileUrl}
@@ -480,13 +578,113 @@ const DirectMessagePage: React.FC = () => {
       </a>
     );
   };
-  
+
+  const handleCameraButtonClick = () => {
+    fileInputCameraRef.current?.click();
+  };
+ const handleMicClick = async () => {
+  if (!friendId || !token || !API_URL) return; // <-- Changed from roomId
+
+  let toastId: string | undefined;
+
+  if (isRecording) {
+    // STOP RECORDING
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+    // Remove any currently displayed toast related to recording
+    toast.dismiss(toastId); // I fixed this from the original to just toast.dismiss()
+  } else {
+    // START RECORDING
+    try {
+      // NOTE: We only show the "Recording..." toast, and remove it on stop/error
+      toastId = toast.loading("Recording... Tap mic to stop.", {
+        icon: "🔴",
+        duration: Infinity,
+      });
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        // Dismiss the persistent "Recording..." toast
+        toast.dismiss(toastId);
+
+        // Show new toast for processing/uploading
+        const uploadToastId = toast.loading("Processing voice memo...");
+
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm",
+        });
+        stream.getTracks().forEach((track) => track.stop());
+
+        const audioFile = new File(
+          [audioBlob],
+          `voice_memo_${Date.now()}.webm`,
+          { type: "audio/webm" }
+        );
+        const formData = new FormData();
+        formData.append("file", audioFile);
+
+        setIsUploading(true);
+
+        try {
+          const { data } = await axios.post(
+            `${API_URL}/api/messages/upload-file`,
+            formData,
+            {
+              headers: {
+                "Content-Type": "multipart/form-data",
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          setFileToSend({
+            fileUrl: data.fileUrl,
+            fileType: data.fileType || "audio",
+            fileName: audioFile.name,
+          });
+
+          // Replace "Processing" with final status. If user doesn't want success toast, change to dismiss or update.
+          // Since the user explicitly requested to remove the stuck toast, we will simply replace the "Processing" toast with a final confirmation and then dismiss it quickly.
+          toast.success("Voice memo ready to send!", {
+            id: uploadToastId,
+            duration: 2000,
+          }); // Show for 2 seconds and auto-close
+        } catch (error) {
+          console.error("Voice memo upload error:", error);
+          // Replace "Processing" with error
+          toast.error("Voice memo failed to upload.", { id: uploadToastId });
+        } finally {
+          setIsUploading(false);
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      setFileToSend(null);
+      setText("");
+    } catch (error) {
+      console.error("Error starting voice recording:", error);
+      // Dismiss the toast in case of a microhone error
+      if (toastId) toast.dismiss(toastId);
+      setIsRecording(false);
+    }
+  }
+};
+
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
       <Toaster position="top-center" />
       <div className="relative flex w-full max-w-7xl h-[90vh] bg-white rounded-2xl shadow-xl overflow-hidden">
         <div className="flex flex-col grow w-full relative">
-          
           {/* --- 7. UPDATED HEADER (FIXED) --- */}
           <div className="relative flex flex-col items-center p-4 border-b bg-white z-10">
             <div className="flex items-center justify-between w-full">
@@ -513,19 +711,17 @@ const DirectMessagePage: React.FC = () => {
                     <span className="w-2.5 h-2.5 bg-blue-500 rounded-full"></span>
                   )}
                 </div>
-                
+
                 {/* Subtext: "typing..." takes priority, then "Online" */}
                 {isFriendTyping ? (
                   <span className="text-sm text-gray-500 italic h-4">
                     typing...
                   </span>
                 ) : isFriendOnline ? (
-                  <span className="text-sm text-gray-500 h-4">
-                    Online
-                  </span>
+                  <span className="text-sm text-gray-500 h-4">Online</span>
                 ) : (
                   // Placeholder to prevent layout shift
-                  <span className="h-4"></span> 
+                  <span className="h-4"></span>
                 )}
               </div>
 
@@ -640,27 +836,31 @@ const DirectMessagePage: React.FC = () => {
                               } ${msg.isPending ? "opacity-70" : ""}`}
                             >
                               {hasMedia && (
-                                <div className="mb-2">{renderMedia(msg, isMine)}</div>
+                                <div className="mb-2">
+                                  {renderMedia(msg, isMine)}
+                                </div>
                               )}
                               {msg.text && (
-                                <p className={`
-                                  ${isJumbo ? 'text-4xl' : ''}
+                                <p
+                                  className={`
+                                  ${isJumbo ? "text-4xl" : ""}
                                   ${
-                                  useSimpleLayout 
-                                    ? 'whitespace-pre-line break-all' 
-                                    : 'whitespace-pre-line'
+                                    useSimpleLayout
+                                      ? "whitespace-pre-line break-all"
+                                      : "whitespace-pre-line"
                                   }
-                                `}>
+                                `}
+                                >
                                   {msg.text}
                                 </p>
                               )}
-                              <span className={`text-xs shrink-0 ${
-                                isMine ? "text-indigo-200" : "text-gray-400"
-                              } ${
-                                useSimpleLayout 
-                                  ? "ml-2" 
-                                  : "mt-1 self-end"
-                              }`}>
+                              <span
+                                className={`text-xs shrink-0 ${
+                                  isMine ? "text-indigo-200" : "text-gray-400"
+                                } ${
+                                  useSimpleLayout ? "ml-2" : "mt-1 self-end"
+                                }`}
+                              >
                                 {msg.isEdited && "(edited) "}
                                 {msg.isPending ? (
                                   <Clock className="w-3 h-3 animate-spin" />
@@ -775,7 +975,15 @@ const DirectMessagePage: React.FC = () => {
                 </button>
               </div>
             )}
-            <form onSubmit={sendMessage} className="flex gap-4 items-center">
+            <form onSubmit={sendMessage} className="flex gap-2 items-center">
+              <input
+                type="file"
+                ref={fileInputCameraRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                accept="image/*,video/*"
+                capture="environment"
+              />
               <input
                 type="file"
                 ref={fileInputRef}
@@ -785,9 +993,17 @@ const DirectMessagePage: React.FC = () => {
               />
               <button
                 type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
+                disabled={isRecording}
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
                 onClick={handleFileButtonClick}
-                disabled={isUploading}
-                className="p-3 rounded-lg text-gray-600 hover:bg-gray-100 transition disabled:opacity-50"
+                disabled={isUploading || isRecording}
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
               >
                 {isUploading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -797,25 +1013,57 @@ const DirectMessagePage: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="p-3 rounded-lg text-gray-600 hover:bg-gray-100 transition"
+                onClick={handleCameraButtonClick}
+                disabled={isUploading || isRecording}
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
               >
-                <Smile className="w-5 h-5" />
+                <Camera className="w-5 h-5" />
               </button>
-              <input
-                type="text"
-                placeholder="Type a message..."
-                value={text}
-                onChange={handleInputChange}
-                className="grow px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                type="submit"
-                disabled={isUploading || (!text.trim() && !fileToSend)}
-                className="p-3.5 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
-              >
-                <Send className="w-5 h-5" />
-              </button>
+              <div className="grow relative">
+                {isRecording && (
+                  <span className="absolute inset-0 flex items-center justify-start px-4 text-red-500 font-semibold pointer-events-none z-10 bg-gray-100 rounded-lg">
+                    <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse mr-2"></span>
+                    Recording...
+                  </span>
+                )}
+                <input
+                  type="text"
+                  placeholder={"Type a message..."}
+                  value={text}
+                  onChange={handleInputChange}
+                  disabled={isRecording}
+                  className={`grow w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                    isRecording
+                      ? "opacity-0 disabled:bg-gray-100"
+                      : "disabled:bg-gray-100"
+                  }`}
+                />
+              </div>
+              {/* Conditional Send/Mic Button (New) */}
+              {text.trim().length > 0 || fileToSend ? (
+                // SEND BUTTON
+                <button
+                  type="submit"
+                  disabled={isUploading || isRecording}
+                  className="p-3.5 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              ) : (
+                // MIC BUTTON
+                <button
+                  type="button"
+                  onClick={handleMicClick}
+                  disabled={isUploading}
+                  className={`p-3.5 rounded-lg font-semibold text-white shadow-md transition ${
+                    isRecording
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-indigo-600 hover:bg-indigo-700"
+                  }`}
+                >
+                  <Mic className="w-5 h-5" />
+                </button>
+              )}
             </form>
           </div>
         </div>
@@ -828,14 +1076,33 @@ const DirectMessagePage: React.FC = () => {
           className="relative z-50"
           onClose={() => setIsUnsendMyModalOpen(false)}
         >
-          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
             <div className="fixed inset-0 bg-gray-900/75 backdrop-blur-sm" />
           </Transition.Child>
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
-              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
                 <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 sm:p-8 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <Dialog.Title
+                    as="h3"
+                    className="text-lg font-bold text-gray-900 flex items-center gap-2"
+                  >
                     <AlertTriangle className="w-5 h-5 text-red-600" />
                     Unsend All My Messages
                   </Dialog.Title>
@@ -846,10 +1113,18 @@ const DirectMessagePage: React.FC = () => {
                     </p>
                   </div>
                   <div className="mt-6 flex justify-end gap-3">
-                    <button type="button" className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200" onClick={() => setIsUnsendMyModalOpen(false)}>
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                      onClick={() => setIsUnsendMyModalOpen(false)}
+                    >
                       Cancel
                     </button>
-                    <button type="button" className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700" onClick={handleConfirmUnsendMyMessages}>
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700"
+                      onClick={handleConfirmUnsendMyMessages}
+                    >
                       Yes, Unsend All
                     </button>
                   </div>
@@ -861,14 +1136,33 @@ const DirectMessagePage: React.FC = () => {
       </Transition>
       <Transition appear show={isEditModalOpen} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={closeEditModal}>
-          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
             <div className="fixed inset-0 bg-gray-900/75 backdrop-blur-sm" />
           </Transition.Child>
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
-              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
                 <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 sm:p-8 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-bold text-gray-900">
+                  <Dialog.Title
+                    as="h3"
+                    className="text-lg font-bold text-gray-900"
+                  >
                     Edit Message
                   </Dialog.Title>
                   <form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
@@ -879,10 +1173,17 @@ const DirectMessagePage: React.FC = () => {
                       autoFocus
                     />
                     <div className="mt-6 flex justify-end gap-3">
-                      <button type="button" className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200" onClick={closeEditModal}>
+                      <button
+                        type="button"
+                        className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                        onClick={closeEditModal}
+                      >
                         Cancel
                       </button>
-                      <button type="submit" className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+                      <button
+                        type="submit"
+                        className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                      >
                         Save Changes
                       </button>
                     </div>
@@ -904,20 +1205,3 @@ const DirectMessagePage: React.FC = () => {
 };
 
 export default DirectMessagePage;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
