@@ -1,4 +1,5 @@
 import React, { useEffect, useState, Fragment } from "react";
+import { getErrorMessage } from "../utils/errorUtils";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import { Dialog, Transition, Menu } from "@headlessui/react";
@@ -142,9 +143,7 @@ const LobbyPage: React.FC = () => {
       await fetchPublicRooms();
     } catch (err: any) {
       console.error("Error creating public room:", err);
-      setError(
-        err.response?.data?.message || "Failed to create room. Try again."
-      );
+      setError(getErrorMessage(err, "Failed to create room. Try again."));
     } finally {
       setPublicLoading(false);
     }
@@ -175,9 +174,7 @@ const LobbyPage: React.FC = () => {
       await fetchMyRooms(); // Refresh 'My Rooms' list
     } catch (err: any) {
       console.error("Error creating private room:", err);
-      setError(
-        err.response?.data?.message || "Failed to create private room."
-      );
+      setError(getErrorMessage(err, "Failed to create private room."));
     } finally {
       setPrivateCreateLoading(false);
     }
@@ -206,7 +203,7 @@ const LobbyPage: React.FC = () => {
       navigate(`/room/${res.data._id}`);
     } catch (err: any) {
       console.error("Error joining private room:", err);
-      setError(err.response?.data?.message || "Invalid name or invite code.");
+      setError(getErrorMessage(err, "Invalid name or invite code."));
     } finally {
       setJoinLoading(false);
     }
@@ -229,9 +226,7 @@ const LobbyPage: React.FC = () => {
       );
     } catch (err: any) {
       console.error("Error deleting room:", err);
-      setError(
-        err.response?.data?.message || "Failed to delete room. Try again."
-      );
+      setError(getErrorMessage(err, "Failed to delete room. Try again."));
     } finally {
       setDeletingId(null);
       setRoomToDelete(null);

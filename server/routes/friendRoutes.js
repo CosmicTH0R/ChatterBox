@@ -5,38 +5,36 @@ import {
   rejectFriendRequest,
   removeFriend,
   getFriendsAndRequests,
-  getConversations, // <-- 1. Import the new function
+  getConversations,
 } from '../controllers/friendController.js';
 import { protect } from '../middleware/authMiddleware.js';
+import {
+  validateSendFriendRequest,
+  validateFriendRequestAction,
+  validateFriendId,
+} from '../middleware/validationMiddleware.js';
 
 const router = express.Router();
 
-// All routes in this file are protected and require a valid token
+// All routes in this file are protected
 router.use(protect);
 
-// GET /api/friends/all
-// Get all friends and pending/sent requests
+// GET /api/friends/all - Get friends and pending requests
 router.get('/all', getFriendsAndRequests);
 
-// --- 2. ADD NEW ROUTE ---
-// GET /api/friends/conversations
-// Get all DM conversations
+// GET /api/friends/conversations - Get DM conversations
 router.get('/conversations', getConversations);
 
-// POST /api/friends/send
-// Send a friend request
-router.post('/send', sendFriendRequest);
+// POST /api/friends/send - Send friend request (validated)
+router.post('/send', validateSendFriendRequest, sendFriendRequest);
 
-// POST /api/friends/accept
-// Accept a friend request
-router.post('/accept', acceptFriendRequest);
+// POST /api/friends/accept - Accept request (validated)
+router.post('/accept', validateFriendRequestAction, acceptFriendRequest);
 
-// POST /api/friends/reject
-// Reject a friend request
-router.post('/reject', rejectFriendRequest);
+// POST /api/friends/reject - Reject request (validated)
+router.post('/reject', validateFriendRequestAction, rejectFriendRequest);
 
-// DELETE /api/friends/:friendId
-// Remove a friend
-router.delete('/:friendId', removeFriend);
+// DELETE /api/friends/:friendId - Remove friend (validated)
+router.delete('/:friendId', validateFriendId, removeFriend);
 
 export default router;

@@ -3,28 +3,32 @@ import {
   getUserProfile,
   updateUserProfile,
   uploadAvatar,
-  getUserPublicProfile, // <-- 1. Import the new function
+  getUserPublicProfile,
 } from '../controllers/userController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { uploadAvatar as uploadMiddleware } from '../middleware/uploadMiddleware.js';
+import {
+  validateUpdateProfile,
+  validateUserId,
+} from '../middleware/validationMiddleware.js';
 
 const router = express.Router();
 
-// Get/Update profile (for the logged-in user)
-router.route('/profile')
-  .get(protect, getUserProfile)
-  .put(protect, updateUserProfile);
+// GET /api/users/profile - Get logged-in user's profile
+router.get('/profile', protect, getUserProfile);
 
-// Upload avatar (for the logged-in user)
+// PUT /api/users/profile - Update profile (validated)
+router.put('/profile', protect, validateUpdateProfile, updateUserProfile);
+
+// POST /api/users/upload-avatar - Upload avatar
 router.post(
   '/upload-avatar',
   protect,
-  uploadMiddleware, // Middleware runs first
-  uploadAvatar      // Controller runs after
+  uploadMiddleware,
+  uploadAvatar
 );
 
-// --- 2. ADD NEW ROUTE ---
-// Get another user's public profile
-router.get('/public/:userId', protect, getUserPublicProfile);
+// GET /api/users/public/:userId - Get public profile (validated)
+router.get('/public/:userId', protect, validateUserId, getUserPublicProfile);
 
 export default router;

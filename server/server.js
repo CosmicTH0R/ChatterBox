@@ -14,12 +14,13 @@ import User from './models/User.js';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import friendRoutes from './routes/friendRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
+import { apiLimiter } from './middleware/rateLimitMiddleware.js';
 
 dotenv.config();
 
 const app = express();
 
-// ... (CORS CONFIG - UNCHANGED) ...
+// ===================== CORS CONFIG =====================
 const allowedOrigins = [
   process.env.CLIENT_URL,
   process.env.CLIENT_URL_LOCAL,
@@ -40,7 +41,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// ... (DATABASE - UNCHANGED) ...
+// ===================== DATABASE =====================
 try {
   await connectDB(process.env.MONGO_URI);
 } catch (error) {
@@ -48,7 +49,20 @@ try {
   process.exit(1);
 }
 
-// ... (REST ROUTES - UNCHANGED) ...
+// ===================== HEALTH CHECK =====================
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ===================== RATE LIMITING =====================
+// Apply global rate limiter to all API routes (100 requests/15 min)
+app.use('/api', apiLimiter);
+
+// ===================== REST ROUTES =====================
 app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/users', userRoutes);
@@ -321,7 +335,6 @@ io.on('connection', (socket) => {
       });
     }
   });
-
   // ... (Moderation Events - UNCHANGED) ...
   socket.on('editMessage', async (data) => {
     try {

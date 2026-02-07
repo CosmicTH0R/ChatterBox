@@ -452,67 +452,6 @@ const DirectMessagePage: React.FC = () => {
     setSelectedMediaUrl(null);
     setSelectedMediaType(null);
   };
-  // const renderMedia = (msg: Message, isMine: boolean) => {
-  //   if (!msg.fileUrl) return null;
-  //   let fileType = msg.fileType;
-  //   if (!fileType) {
-  //     if (msg.fileUrl.match(/\.(mp3|wav|ogg)$/i)) fileType = "audio";
-  //     else if (msg.fileUrl.match(/\.(png|jpg|jpeg|gif|webp)$/i))
-  //       fileType = "image";
-  //     else if (msg.fileUrl.match(/\.(mp4|webm)$/i)) fileType = "video";
-  //     else fileType = "download";
-  //   }
-  //   const baseClasses =
-  //     "p-3 rounded-lg border flex items-center gap-2.5 cursor-pointer transition-colors w-full max-w-xs";
-  //   const otherClasses = `bg-white border-gray-200 text-gray-700 hover:bg-gray-50`;
-  //   const myClasses = `bg-indigo-500 border-indigo-400 text-white hover:bg-indigo-400`;
-  //   if (fileType.startsWith("image")) {
-  //     return (
-  //       <div
-  //         onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
-  //         className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
-  //       >
-  //         <ImageIcon className="w-5 h-5 shrink-0" />
-  //         <span className="font-medium">Photo</span>
-  //       </div>
-  //     );
-  //   }
-  //   if (fileType.startsWith("video")) {
-  //     return (
-  //       <div
-  //         onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
-  //         className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
-  //       >
-  //         <VideoIcon className="w-5 h-5 shrink-0" />
-  //         <span className="font-medium">Video</span>
-  //       </div>
-  //     );
-  //   }
-  //   if (fileType.startsWith("audio")) {
-  //     return (
-  //       <video
-  //         src={msg.fileUrl}
-  //         controls
-  //         className={`
-  //           w-full max-w-xs h-12 rounded-lg
-  //           ${isMine ? "bg-indigo-500" : "bg-gray-100"}
-  //         `}
-  //       />
-  //     );
-  //   }
-  //   return (
-  //     <a
-  //       href={msg.fileUrl}
-  //       target="_blank"
-  //       rel="noopener noreferrer"
-  //       className={`font-medium ${
-  //         isMine ? "text-white underline" : "text-indigo-600 underline"
-  //       }`}
-  //     >
-  //       Download File
-  //     </a>
-  //   );
-  // };
 
 // --- renderMedia Function (Updated) ---
   const renderMedia = (msg: Message, isMine: boolean) => {

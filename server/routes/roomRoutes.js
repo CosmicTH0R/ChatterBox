@@ -5,34 +5,33 @@ import {
   getRoomById,
   deleteRoom,
   joinPrivateRoom,
-  getMyRooms, // 1. Import the new 'getMyRooms' controller
+  getMyRooms,
 } from "../controllers/roomController.js";
 import { protect } from "../middleware/authMiddleware.js";
+import {
+  validateCreateRoom,
+  validateJoinPrivateRoom,
+  validateRoomId,
+} from "../middleware/validationMiddleware.js";
 
 const router = express.Router();
 
-/**
- * ✅ New: GET /api/rooms/myrooms
- * Gets all private rooms a user is a member of or created
- */
-router.get("/myrooms", protect, getMyRooms); // 2. Add the new route
+// GET /api/rooms/myrooms - Get user's private rooms
+router.get("/myrooms", protect, getMyRooms);
 
-// Retrieve all public rooms
-router.get("/", getAllRooms); // This now only gets public rooms
+// GET /api/rooms - Get all public rooms
+router.get("/", getAllRooms);
 
-// Retrieve a specific room by its ID
-router.get("/:id", getRoomById);
+// GET /api/rooms/:id - Get room by ID (validated)
+router.get("/:id", validateRoomId, getRoomById);
 
-// Create a new room (public or private)
-router.post("/", protect, createRoom);
+// POST /api/rooms - Create room (validated)
+router.post("/", protect, validateCreateRoom, createRoom);
 
-// Delete a room
-router.delete("/:id", protect, deleteRoom);
+// DELETE /api/rooms/:id - Delete room (validated)
+router.delete("/:id", protect, validateRoomId, deleteRoom);
 
-/**
- * ✅ Task 18: Create a new route: POST /api/rooms/join
- * This handles the "Join Private Room" form
- */
-router.post("/join", protect, joinPrivateRoom);
+// POST /api/rooms/join - Join private room (validated)
+router.post("/join", protect, validateJoinPrivateRoom, joinPrivateRoom);
 
 export default router;
