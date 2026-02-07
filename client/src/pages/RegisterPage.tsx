@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getErrorMessage } from "../utils/errorUtils";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast, Toaster } from "react-hot-toast";
@@ -34,7 +35,7 @@ const RegisterPage: React.FC = () => {
       });
       navigate("/lobby");
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Registration failed", {
+      toast.error(getErrorMessage(err, "Registration failed"), {
         id: loadingToastId,
       });
     }

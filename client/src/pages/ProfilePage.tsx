@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, Fragment } from "react";
+import { getErrorMessage } from "../utils/errorUtils";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast, Toaster } from "react-hot-toast";
@@ -128,7 +129,7 @@ const ProfilePage: React.FC = () => {
 
       toast.success("Profile updated successfully!", { id: toastId });
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update profile.", {
+      toast.error(getErrorMessage(err, "Failed to update profile."), {
         id: toastId,
       });
     } finally {
@@ -142,9 +143,7 @@ const ProfilePage: React.FC = () => {
     if (!oldPassword || !newPassword || !confirmPassword) {
       toast.error("Please fill in all password fields."); return;
     }
-    if (newPassword.length < 6) {
-      toast.error("New password must be at least 6 characters long."); return;
-    }
+    // Removed manual length check to let backend handle validation
     if (newPassword !== confirmPassword) {
       toast.error("New passwords do not match."); return;
     }
@@ -163,7 +162,7 @@ const ProfilePage: React.FC = () => {
       setConfirmPassword("");
       setIsPasswordModalOpen(false);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update password.", {
+      toast.error(getErrorMessage(err, "Failed to update password."), {
         id: toastId,
       });
     } finally {

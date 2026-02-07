@@ -25,6 +25,17 @@ const isValidObjectId = (value) => {
 };
 
 // ===================== AUTH VALIDATIONS =====================
+// Helper for detailed password validation
+const validatePasswordStrength = (value) => {
+  if (!value) return true; // Handled by .notEmpty()
+  if (value.length < 8) throw new Error('Password must be at least 8 characters');
+  if (!/[a-z]/.test(value)) throw new Error('Password must contain at least 1 lowercase letter');
+  if (!/[A-Z]/.test(value)) throw new Error('Password must contain at least 1 uppercase letter');
+  if (!/[0-9]/.test(value)) throw new Error('Password must contain at least 1 number');
+  if (!/[\W_]/.test(value)) throw new Error('Password must contain at least 1 symbol (!@#$...)');
+  return true;
+};
+
 export const validateRegister = [
   body('username')
     .trim()
@@ -33,7 +44,7 @@ export const validateRegister = [
     .matches(/^[a-zA-Z0-9_]+$/).withMessage('Username can only contain letters, numbers, and underscores'),
   body('password')
     .notEmpty().withMessage('Password is required')
-    .isLength({ min: 6, max: 128 }).withMessage('Password must be 6-128 characters'),
+    .custom(validatePasswordStrength),
   validate,
 ];
 
@@ -51,7 +62,7 @@ export const validateUpdatePassword = [
     .notEmpty().withMessage('Old password is required'),
   body('newPassword')
     .notEmpty().withMessage('New password is required')
-    .isLength({ min: 6, max: 128 }).withMessage('New password must be 6-128 characters'),
+    .custom(validatePasswordStrength),
   validate,
 ];
 

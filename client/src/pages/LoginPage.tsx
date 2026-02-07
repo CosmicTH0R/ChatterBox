@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getErrorMessage } from "../utils/errorUtils";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast, Toaster } from "react-hot-toast";
@@ -38,7 +39,7 @@ const LoginPage: React.FC = () => {
       toast.success("Login successful!", { id: loadingToastId });
       navigate("/lobby");
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Invalid credentials", {
+      toast.error(getErrorMessage(err, "Invalid credentials"), {
         id: loadingToastId,
       });
     }
