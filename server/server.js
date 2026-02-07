@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import helmet from 'helmet';
 import jwt from 'jsonwebtoken';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
@@ -19,6 +20,24 @@ import { apiLimiter } from './middleware/rateLimitMiddleware.js';
 dotenv.config();
 
 const app = express();
+
+// ===================== SECURITY HEADERS (Helmet.js) =====================
+// Helmet sets various HTTP headers to help protect your app
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],  // Allow Cloudinary images
+      mediaSrc: ["'self'", "https:", "blob:"],  // Allow Cloudinary media
+      connectSrc: ["'self'", "wss:", "ws:", process.env.CLIENT_URL].filter(Boolean),
+    },
+  },
+  crossOriginEmbedderPolicy: false,  // Required for loading external images
+  crossOriginResourcePolicy: { policy: "cross-origin" },  // Allow cross-origin resources
+}));
 
 // ===================== CORS CONFIG =====================
 const allowedOrigins = [
