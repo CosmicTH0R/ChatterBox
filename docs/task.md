@@ -311,7 +311,7 @@
 1. [x] Redis setup
 2. [ ] Caching layer
 3. [x] Socket.io Redis adapter
-4. [ ] Redis-based presence
+4. [x] Redis-based presence
 
 ### Week 3: Quality
 1. [ ] TypeScript migration (server)

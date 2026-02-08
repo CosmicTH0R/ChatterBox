@@ -139,29 +139,26 @@ io.use(async (socket, next) => {
 // ===================== USER & ROOM TRACKING =====================
 const roomUsers = {}; // Tracks users *per room*
 // --- (NEW) --- Tracks all online users and their socket(s)
-const globalOnlineUsers = new Map(); 
+// Removed globalOnlineUsers Map in favor of Redis
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   const { userId, username, name, avatarUrl } = socket.data;
 
   console.log(
     `🟢 User connected: ${socket.id} - ${username} (${userId})`
   );
 
-  // --- (NEW) --- Add user to global online list
-  try {
-    const existingSockets = globalOnlineUsers.get(userId) || new Set();
-    const wasOffline = existingSockets.size === 0;
-    
-    existingSockets.add(socket.id);
-    globalOnlineUsers.set(userId, existingSockets);
+  // --- (NEW) --- Join Personal Room & Redis Presence
+  socket.join(`user:${userId}`);
 
-    // If this was their first connection, notify everyone
-    if (wasOffline) {
+  try {
+    const count = await pubClient.hincrby('online_users', userId, 1);
+    // If first connection (across all servers), notify everyone
+    if (count === 1) {
       socket.broadcast.emit('userStatusUpdate', { userId, isOnline: true });
     }
   } catch (e) {
-    console.error('Error adding user to online list:', e)
+    console.error('Error updating Redis online count:', e)
   }
   
   let userRoomId = ''; // Tracks the *current room* for this socket
@@ -237,10 +234,10 @@ io.on('connection', (socket) => {
 
     console.log(`👥 ${username} joined DM: ${dmRoomName}`);
 
-    // --- (NEW) --- Check friend's online status
+    // --- (NEW) --- Check friend's online status via Redis
     try {
-      const isFriendOnline = globalOnlineUsers.has(friendId);
-      socket.emit('friendStatus', { isOnline: isFriendOnline });
+      const isFriendOnline = await pubClient.hexists('online_users', friendId);
+      socket.emit('friendStatus', { isOnline: !!isFriendOnline });
     } catch (e) {
       console.error('Error checking friend status:', e)
     }
@@ -353,25 +350,13 @@ io.on('connection', (socket) => {
   // --- (NEW) FOR DMs: START TYPING ---
   socket.on('dmTyping', ({ friendId }) => {
     if (!friendId) return;
-    const friendSocketIds = globalOnlineUsers.get(friendId);
-    
-    if (friendSocketIds) {
-      friendSocketIds.forEach(socketId => {
-        io.to(socketId).emit('friendTyping');
-      });
-    }
+    io.to(`user:${friendId}`).emit('friendTyping');
   });
 
   // --- (NEW) FOR DMs: STOP TYPING ---
   socket.on('stopDmTyping', ({ friendId }) => {
     if (!friendId) return;
-    const friendSocketIds = globalOnlineUsers.get(friendId);
-    
-    if (friendSocketIds) {
-      friendSocketIds.forEach(socketId => {
-        io.to(socketId).emit('friendStoppedTyping');
-      });
-    }
+    io.to(`user:${friendId}`).emit('friendStoppedTyping');
   });
   // ... (Moderation Events - UNCHANGED) ...
   socket.on('editMessage', async (data) => {
@@ -476,50 +461,45 @@ io.on('connection', (socket) => {
   });
 
   // ===================== (MODIFIED) DISCONNECT =====================
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log(`🔴 User disconnected: ${socket.id} - ${username}`);
 
-    // --- (NEW) --- Handle Global Online Status
+    // --- (NEW) --- Handle Global Online Status via Redis
     try {
-      const userSocketIds = globalOnlineUsers.get(userId);
-      if (userSocketIds) {
-        userSocketIds.delete(socket.id);
+      const count = await pubClient.hincrby('online_users', userId, -1);
+      
+      if (count <= 0) {
+        // User is now fully offline
+        await pubClient.hdel('online_users', userId);
+        console.log(`🔌 User offline: ${username} (${userId})`);
         
-        if (userSocketIds.size === 0) {
-          // User is now fully offline
-          globalOnlineUsers.delete(userId);
-          console.log(`🔌 User offline: ${username} (${userId})`);
-          // Notify all clients
-          socket.broadcast.emit('userStatusUpdate', { 
-            userId: userId, 
-            isOnline: false 
-          });
-        } else {
-          // User is still online on another tab/device
-          globalOnlineUsers.set(userId, userSocketIds);
-        }
+        // Notify all clients
+        socket.broadcast.emit('userStatusUpdate', { 
+          userId: userId, 
+          isOnline: false 
+        });
       }
     } catch (e) {
       console.error('Error removing user from online list:', e)
     }
 
     // --- (EXISTING) --- Handle Room Chat Status
-    // This logic is slightly different. userRoomId is the *last room this socket was in*.
-    // We can simplify this to just check the `roomUsers` object.
-    for (const roomId in roomUsers) {
-      const userIndex = roomUsers[roomId].findIndex(u => u._id === userId);
+    // Check if user is fully offline (no other tabs)
+    try {
+      const isOnline = await pubClient.hexists('online_users', userId);
       
-      if (userIndex !== -1) {
-         // Check if this was the user's last socket in this room
-         // This is complex. A simpler, "good enough" way is to check if they are globally offline.
-         if (!globalOnlineUsers.has(userId)) {
-            roomUsers[roomId].splice(userIndex, 1);
-            io.to(roomId).emit('updateUserList', roomUsers[roomId]);
-            io.to(roomId).emit('systemMessage', `👋 ${username} left the chat.`);
+      if (!isOnline) {
+         for (const roomId in roomUsers) {
+           const userIndex = roomUsers[roomId].findIndex(u => u._id === userId);
+           if (userIndex !== -1) {
+              roomUsers[roomId].splice(userIndex, 1);
+              io.to(roomId).emit('updateUserList', roomUsers[roomId]);
+              io.to(roomId).emit('systemMessage', `👋 ${username} left the chat.`);
+           }
          }
-         // Note: A more robust way would be to track sockets *per room*,
-         // but that's a larger refactor. This logic is fine for now.
       }
+    } catch (e) {
+      console.error('Error in disconnect cleanup:', e);
     }
   });
 });
