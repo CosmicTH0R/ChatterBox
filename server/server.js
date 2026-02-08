@@ -4,11 +4,14 @@ import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
+import xss from 'xss';
 import jwt from 'jsonwebtoken';
 import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import roomRoutes from './routes/roomRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import Message from './models/Message.js';
 import Room from './models/Room.js';
 import User from './models/User.js';
@@ -93,6 +96,18 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: corsOptions,
 });
+
+// Setup Redis Adapter
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const pubClient = new Redis(REDIS_URL);
+const subClient = pubClient.duplicate();
+
+// ioredis connects automatically
+io.adapter(createAdapter(pubClient, subClient));
+console.log('✅ Redis Adapter connected');
+
+pubClient.on('error', (err) => console.error('❌ Redis Pub Client Error:', err));
+subClient.on('error', (err) => console.error('❌ Redis Sub Client Error:', err));
 
 // ... (SOCKET AUTH - UNCHANGED) ...
 io.use(async (socket, next) => {
@@ -248,7 +263,11 @@ io.on('connection', (socket) => {
   // ... (sendMessage - UNCHANGED, it already supports DMs) ...
   socket.on('sendMessage', async (data) => {
     const { text, fileUrl, fileType, roomId, friendId } = data; 
-    if ((!text || !text.trim()) && !fileUrl) { 
+    
+    // Sanitize text input
+    const cleanText = xss(text);
+
+    if ((!cleanText || !cleanText.trim()) && !fileUrl) { 
       return socket.emit('error', 'Cannot send an empty message.');
     }
     const tempUserObject = {
@@ -261,7 +280,7 @@ io.on('connection', (socket) => {
       const tempMessage = {
         _id: new Date().getTime(),
         user: tempUserObject,
-        text,
+        text: cleanText,
         fileUrl,
         fileType,
         room: roomId,
@@ -271,7 +290,7 @@ io.on('connection', (socket) => {
       io.to(roomId).emit('receiveMessage', tempMessage);
       try {
         const message = new Message({
-          text,
+          text: cleanText,
           fileUrl,
           fileType,
           room: roomId,
@@ -294,7 +313,7 @@ io.on('connection', (socket) => {
       const tempMessage = {
         _id: new Date().getTime(),
         user: tempUserObject,
-        text,
+        text: cleanText,
         fileUrl,
         fileType,
         isDM: true,
@@ -305,7 +324,7 @@ io.on('connection', (socket) => {
       io.to(dmRoomName).emit('receiveMessage', tempMessage);
       try {
         const message = new Message({
-          text,
+          text: cleanText,
           fileUrl,
           fileType,
           user: userId,
@@ -363,7 +382,11 @@ io.on('connection', (socket) => {
       if (message.user.toString() !== userId) {
         return socket.emit('error', "You don't have permission to edit this");
       }
-      message.text = newText;
+      
+      const cleanText = xss(newText);
+      if (!cleanText || !cleanText.trim()) return socket.emit('error', 'Message cannot be empty');
+
+      message.text = cleanText;
       message.isEdited = true;
       const saved = await message.save();
       const populated = await saved.populate('user', 'username name avatarUrl');

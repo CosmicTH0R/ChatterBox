@@ -7,31 +7,31 @@
 ## 🔴 Phase 1: Security Hardening (Critical)
 
 ### Rate Limiting
-- [ ] Add `express-rate-limit` for REST API endpoints
-- [ ] Implement per-user rate limiting for socket events (messages/min)
-- [ ] Add login attempt limiting (prevent brute force)
+- [x] Add `express-rate-limit` for REST API endpoints
+- [x] Implement per-user rate limiting for socket events (messages/min)
+- [x] Add login attempt limiting (prevent brute force)
 - [ ] Add Captcha for registration after failed attempts
 
 ### Input Validation & Sanitization
-- [ ] Add `express-validator` for all REST endpoints
-- [ ] Sanitize message text (prevent script injection)
-- [ ] Validate file types server-side (not just MIME check)
-- [ ] Add max length limits for all text inputs
-- [ ] Validate MongoDB ObjectIds before queries
+- [x] Add `express-validator` for all REST endpoints
+- [x] Sanitize message text (prevent script injection)
+- [x] Validate file types server-side (not just MIME check)
+- [x] Add max length limits for all text inputs
+- [x] Validate MongoDB ObjectIds before queries
 
 ### Authentication Improvements
 - [ ] Add refresh token rotation (access token + refresh token)
 - [ ] Implement token blacklisting for logout
-- [ ] Add password strength requirements (uppercase, number, symbol)
+- [x] Add password strength requirements (uppercase, number, symbol)
 - [ ] Add "Forgot Password" with email verification
 - [ ] Add email verification on registration
 - [ ] Consider 2FA (TOTP with Google Authenticator)
 
 ### HTTPS & Headers
 - [ ] Force HTTPS in production
-- [ ] Add security headers (Helmet.js)
+- [x] Add security headers (Helmet.js)
 - [ ] Set secure cookie options
-- [ ] Add CSP (Content Security Policy)
+- [x] Add CSP (Content Security Policy)
 
 ---
 
@@ -46,14 +46,14 @@
 - [ ] Implement soft deletes (archive instead of delete)
 
 ### Caching Layer
-- [ ] Set up Redis for caching
+- [x] Set up Redis for caching
 - [ ] Cache user profiles (TTL: 5 min)
 - [ ] Cache room metadata (TTL: 1 min)
 - [ ] Cache friend lists (invalidate on change)
 - [ ] Implement cache-aside pattern
 
 ### Real-time Scalability
-- [ ] Migrate Socket.io to use Redis adapter
+- [x] Migrate Socket.io to use Redis adapter
 - [ ] Move online presence from memory to Redis
 - [ ] Add sticky sessions for load balancer
 - [ ] Test with multiple server instances
@@ -301,16 +301,16 @@
 ## 🚀 Suggested Implementation Order
 
 ### Week 1: Foundation
-1. [ ] Rate limiting
-2. [ ] Input validation
+1. [x] Rate limiting
+2. [x] Input validation
 3. [ ] Message pagination
-4. [ ] Health endpoint
-5. [ ] Helmet.js security headers
+4. [x] Health endpoint
+5. [x] Helmet.js security headers
 
 ### Week 2: Infrastructure
-1. [ ] Redis setup
+1. [x] Redis setup
 2. [ ] Caching layer
-3. [ ] Socket.io Redis adapter
+3. [x] Socket.io Redis adapter
 4. [ ] Redis-based presence
 
 ### Week 3: Quality
