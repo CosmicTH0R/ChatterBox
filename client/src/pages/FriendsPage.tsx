@@ -1,543 +1,216 @@
 import React, { useState, useEffect, Fragment } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom"; // <-- Removed Link
+import { useNavigate } from "react-router-dom";
 import { toast, Toaster } from "react-hot-toast";
-import {
-  Users,
-  UserPlus,
-  Mail,
-  Loader2,
-  ArrowLeft,
-  MessageSquareText,
-  UserCheck,
-  UserX,
-  Trash2,
-  X,
-  AlertTriangle,
-} from "lucide-react";
+import { Users, UserPlus, Mail, Loader2, MessageSquareText, UserCheck, UserX, Trash2, X, AlertTriangle, Hash } from "lucide-react";
 import { Dialog, Transition } from "@headlessui/react";
-import UserInfoModal from "../components/UserInfoModal"; // <-- 1. IMPORT MODAL
+import UserInfoModal from "../components/UserInfoModal";
 
-// --- INTERFACES ---
-interface Friend {
-  _id: string;
-  username: string;
-  name?: string;
-  avatarUrl?: string;
-}
-
-interface Request {
-  _id: string;
-  username: string;
-  name?: string;
-  avatarUrl?: string;
-}
-
-// --- DEFAULT AVATAR ---
+interface Friend { _id: string; username: string; name?: string; avatarUrl?: string; }
+interface Request { _id: string; username: string; name?: string; avatarUrl?: string; }
 const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/bottts/svg";
 
 const FriendsPage: React.FC = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-  // --- STATE ---
   const [activeTab, setActiveTab] = useState("all");
   const [friends, setFriends] = useState<Friend[]>([]);
   const [receivedRequests, setReceivedRequests] = useState<Request[]>([]);
   const [addUsername, setAddUsername] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // State for the "Remove Friend" confirmation modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [friendToRemove, setFriendToRemove] = useState<Friend | null>(null);
-
-  // --- 2. ADD NEW STATE FOR INFO MODAL ---
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
-  // --- DATA FETCHING ---
   const fetchData = async () => {
     try {
-      const { data } = await axios.get(`${API_URL}/api/friends/all`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const { data } = await axios.get(`${API_URL}/api/friends/all`, { headers: { Authorization: `Bearer ${token}` } });
       setFriends(data.friends || []);
       setReceivedRequests(data.receivedRequests || []);
-    } catch (err) {
-      console.error("Failed to fetch friends data", err);
-      toast.error("Could not load your friends list.");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch { toast.error("Could not load friends."); }
+    finally { setIsLoading(false); }
   };
 
-  useEffect(() => {
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-    fetchData();
-  }, [token, navigate]);
+  useEffect(() => { if (!token) { navigate("/login"); return; } fetchData(); }, [token, navigate]);
 
-  // --- API HANDLERS (Unchanged) ---
   const handleSendRequest = async (e: React.FormEvent) => {
-    // ... (your existing code)
     e.preventDefault();
-    if (!addUsername.trim()) {
-      toast.error("Please enter a username.");
-      return;
-    }
+    if (!addUsername.trim()) { toast.error("Enter a username."); return; }
     setIsSubmitting(true);
-    const toastId = toast.loading("Sending request...");
+    const id = toast.loading("Sending request...");
     try {
-      const { data } = await axios.post(
-        `${API_URL}/api/friends/send`,
-        { username: addUsername },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success(data.message, { id: toastId });
-      setAddUsername("");
-      fetchData(); 
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to send request.", {
-        id: toastId,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+      const { data } = await axios.post(`${API_URL}/api/friends/send`, { username: addUsername }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(data.message, { id }); setAddUsername(""); fetchData();
+    } catch (err: any) { toast.error(err.response?.data?.message || "Failed.", { id }); }
+    finally { setIsSubmitting(false); }
   };
 
   const handleAcceptRequest = async (requestId: string) => {
-    // ... (your existing code)
-     const toastId = toast.loading("Accepting...");
-    try {
-      const { data } = await axios.post(
-        `${API_URL}/api/friends/accept`,
-        { requestId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success(data.message, { id: toastId });
-      fetchData(); 
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to accept.", {
-        id: toastId,
-      });
-    }
+    const id = toast.loading("Accepting...");
+    try { const { data } = await axios.post(`${API_URL}/api/friends/accept`, { requestId }, { headers: { Authorization: `Bearer ${token}` } }); toast.success(data.message, { id }); fetchData(); }
+    catch (err: any) { toast.error(err.response?.data?.message || "Failed.", { id }); }
   };
 
   const handleRejectRequest = async (requestId: string) => {
-    // ... (your existing code)
-    const toastId = toast.loading("Rejecting...");
-    try {
-      const { data } = await axios.post(
-        `${API_URL}/api/friends/reject`,
-        { requestId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success(data.message, { id: toastId });
-      fetchData(); 
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to reject.", {
-        id: toastId,
-      });
-    }
+    const id = toast.loading("Rejecting...");
+    try { const { data } = await axios.post(`${API_URL}/api/friends/reject`, { requestId }, { headers: { Authorization: `Bearer ${token}` } }); toast.success(data.message, { id }); fetchData(); }
+    catch (err: any) { toast.error(err.response?.data?.message || "Failed.", { id }); }
   };
 
   const handleRemoveFriend = async () => {
-    // ... (your existing code)
     if (!friendToRemove) return;
-    
     setIsSubmitting(true);
-    const toastId = toast.loading("Removing friend...");
-    try {
-      const { data } = await axios.delete(
-        `${API_URL}/api/friends/${friendToRemove._id}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success(data.message, { id: toastId });
-      closeModal();
-      fetchData(); 
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to remove friend.", {
-        id: toastId,
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+    const id = toast.loading("Removing...");
+    try { const { data } = await axios.delete(`${API_URL}/api/friends/${friendToRemove._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast.success(data.message, { id }); setIsModalOpen(false); setFriendToRemove(null); fetchData(); }
+    catch (err: any) { toast.error(err.response?.data?.message || "Failed.", { id }); }
+    finally { setIsSubmitting(false); }
   };
 
-  // --- REMOVE FRIEND MODAL HANDLERS ---
-  const openModal = (e: React.MouseEvent, friend: Friend) => {
-    e.stopPropagation(); // Stop click from bubbling up to the modal opener
-    setFriendToRemove(friend);
-    setIsModalOpen(true);
-  };
+  const TABS = [
+    { id: 'all', label: 'All', icon: <Users className="w-4 h-4" />, badge: friends.length > 0 ? friends.length : null },
+    { id: 'pending', label: 'Pending', icon: <Mail className="w-4 h-4" />, badge: receivedRequests.length > 0 ? receivedRequests.length : null },
+    { id: 'add', label: 'Add Friend', icon: <UserPlus className="w-4 h-4" />, badge: null },
+  ];
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setFriendToRemove(null);
-  };
-
-  // --- 3. NEW INFO MODAL HANDLERS ---
-  const openInfoModal = (userId: string) => {
-    setSelectedUserId(userId);
-    setIsInfoModalOpen(true);
-  };
-
-  const closeInfoModal = () => {
-    setIsInfoModalOpen(false);
-    setSelectedUserId(null);
-  };
-
-  // --- RENDER HELPER ---
-  const renderTabContent = () => {
-    if (isLoading) {
-      // ... (unchanged)
-       return (
-        <div className="grow flex justify-center items-center h-full">
-          <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
-        </div>
-      );
-    }
-
-    // --- 4. TAB 1: ALL FRIENDS (UPDATED) ---
-    if (activeTab === "all") {
-      return (
-        <div className="grow flex flex-col">
-          {friends.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {friends.map((friend) => (
-                <li
-                  key={friend._id}
-                  className="py-4 flex items-center justify-between"
-                >
-                  {/* Replaced Link with Button to open modal */}
-                  <button
-                    type="button"
-                    onClick={() => openInfoModal(friend._id)}
-                    className="flex items-center gap-4 grow hover:opacity-80 transition-opacity text-left"
-                  >
-                    <img
-                      src={friend.avatarUrl || DEFAULT_AVATAR}
-                      alt={friend.username}
-                      className="w-10 h-10 rounded-full bg-gray-200 object-cover"
-                      onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
-                    />
-                    <div>
-                      <span className="font-semibold text-gray-800">
-                        {friend.name || friend.username}
-                      </span>
-                      <p className="text-sm text-gray-500">@{friend.username}</p>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={(e) => openModal(e, friend)} // Pass event to stop propagation
-                    className="p-2 rounded-lg text-red-600 hover:bg-red-100 shrink-0 ml-4"
-                    title="Remove friend"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="grow flex items-center justify-center h-full">
-              <p className="text-gray-500">
-                You haven't added any friends yet.
-              </p>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // --- 5. TAB 2: PENDING REQUESTS (UPDATED) ---
-    if (activeTab === "pending") {
-      return (
-        <div className="grow flex flex-col">
-          {receivedRequests.length > 0 ? (
-            <ul className="divide-y divide-gray-200">
-              {receivedRequests.map((req) => (
-                <li
-                  key={req._id}
-                  className="py-4 flex items-center justify-between"
-                >
-                  {/* Replaced div with Button to open modal */}
-                  <button
-                    type="button"
-                    onClick={() => openInfoModal(req._id)}
-                    className="flex items-center gap-4 grow hover:opacity-80 transition-opacity text-left"
-                  >
-                    <img
-                      src={req.avatarUrl || DEFAULT_AVATAR}
-                      alt={req.username}
-                      className="w-10 h-10 rounded-full bg-gray-200 object-cover"
-                      onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
-                    />
-                    <div>
-                      <span className="font-semibold text-gray-800">
-                        {req.name || req.username}
-                      </span>
-                      <p className="text-sm text-gray-500">@{req.username}</p>
-                    </div>
-                  </button>
-                  <div className="flex gap-2 shrink-0 ml-4">
-                    <button
-                      onClick={() => handleAcceptRequest(req._id)}
-                      className="p-2 rounded-lg text-green-600 hover:bg-green-100"
-                      title="Accept"
-                    >
-                      <UserCheck className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleRejectRequest(req._id)}
-                      className="p-2 rounded-lg text-red-600 hover:bg-red-100"
-                      title="Reject"
-                    >
-                      <UserX className="w-5 h-5" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="grow flex items-center justify-center h-full">
-              <p className="text-gray-500">
-                You have no pending friend requests.
-              </p>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // --- TAB 3: ADD FRIEND (Unchanged) ---
-    if (activeTab === "add") {
-      return (
-        <form onSubmit={handleSendRequest} className="space-y-4 pt-4">
-         {/* ... (your existing form code) ... */}
-           <div>
-            <label
-              htmlFor="username"
-              className="block text-sm font-semibold text-gray-700 mb-2"
-            >
-              Add Friend by Username
-            </label>
-            <div className="relative">
-              <UserPlus className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
-              <input
-                id="username"
-                type="text"
-                placeholder="Enter a username"
-                value={addUsername}
-                onChange={(e) => setAddUsername(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
-          >
-            {isSubmitting ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <UserPlus className="w-5 h-5" />
-            )}
-            {isSubmitting ? "Sending..." : "Send Friend Request"}
-          </button>
-        </form>
-      );
-    }
-
-    return null;
-  };
-
-  // --- RENDER ---
   return (
-    <>
-      <Toaster position="top-center" />
-      <div className="min-h-screen bg-gray-100 font-inter flex flex-col">
-        {/* Header (unchanged) */}
-        <header className="bg-white shadow-sm">
-          {/* ... (your existing header code) ... */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <MessageSquareText className="w-8 h-8 text-indigo-600" />
-              <span className="text-2xl font-bold text-gray-900">
-                Chatterbox
-              </span>
-            </div>
-            <button
-              onClick={() => navigate("/lobby")}
-              className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-indigo-600"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Lobby
+    <div className="dc-layout">
+      <Toaster position="top-center" toastOptions={{ style: { background: '#313338', color: '#DBDEE1', border: '1px solid #3F4147' } }} />
+
+      {/* Sidebar */}
+      <div className="dc-sidebar">
+        <div className="dc-sidebar-header" onClick={() => navigate("/lobby")}>
+          <MessageSquareText className="w-5 h-5 mr-2" style={{ color: 'var(--dc-accent)' }} />Chatterbox
+        </div>
+        <div style={{ padding: '8px 0' }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)} className="dc-channel-item" style={{ width: '100%', background: activeTab === t.id ? 'var(--dc-channel-active-bg)' : 'transparent', color: activeTab === t.id ? 'var(--dc-text-white)' : 'var(--dc-channel-text)', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between', border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: '4px', margin: '1px 8px', padding: '6px 8px', boxSizing: 'border-box', width: 'calc(100% - 16px)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>{t.icon}{t.label}</span>
+              {t.badge && <span className="dc-badge">{t.badge}</span>}
             </button>
-          </div>
-        </header>
-
-        {/* Page Content (unchanged) */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 grow flex flex-col w-full">
-          {/* ... (your existing main/title code) ... */}
-          <div className="flex items-center gap-3 mb-6">
-            <Users className="w-8 h-8 text-indigo-600" />
-            <h2 className="text-3xl font-bold text-gray-900">
-              Manage Friends
-            </h2>
-          </div>
-          
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col grow">
-            {/* Tab Navigation (unchanged) */}
-            <div className="flex border-b border-gray-200">
-             {/* ... (your existing tab buttons) ... */}
-             <button
-                onClick={() => setActiveTab("all")}
-                className={`flex-1 py-4 text-center font-semibold flex justify-center items-center gap-2 ${
-                  activeTab === "all"
-                    ? "border-b-2 border-indigo-600 text-indigo-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <Users className="w-5 h-5" />
-                All Friends
-                {friends.length > 0 && (
-                  <span className="bg-gray-200 text-gray-700 text-xs font-bold rounded-full px-2 py-0.5">
-                    {friends.length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("pending")}
-                className={`flex-1 py-4 text-center font-semibold flex justify-center items-center gap-2 ${
-                  activeTab === "pending"
-                    ? "border-b-2 border-indigo-600 text-indigo-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <Mail className="w-5 h-5" />
-                Pending
-                {receivedRequests.length > 0 && (
-                  <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
-                    {receivedRequests.length}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("add")}
-                className={`flex-1 py-4 text-center font-semibold flex justify-center items-center gap-2 ${
-                  activeTab === "add"
-                    ? "border-b-2 border-indigo-600 text-indigo-600"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <UserPlus className="w-5 h-5" />
-                Add Friend
-              </button>
-            </div>
-
-            {/* Tab Content (unchanged) */}
-            <div className="p-6 sm:p-8 grow flex flex-col">
-              {renderTabContent()}
-            </div>
-          </div>
-        </main>
+          ))}
+        </div>
+        <div style={{ padding: '8px', marginTop: 'auto' }}>
+          <button onClick={() => navigate('/lobby')} className="dc-btn dc-btn-ghost" style={{ width: '100%', justifyContent: 'flex-start', gap: '8px', fontSize: '13px' }}>
+            <Hash className="w-4 h-4" /> Back to Rooms
+          </button>
+        </div>
       </div>
 
-      {/* Remove Friend Confirmation Modal (unchanged) */}
-      <Transition appear show={isModalOpen} as={Fragment}>
-        {/* ... (your existing modal code) ... */}
-        <Dialog as="div" className="relative z-50" onClose={closeModal}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-gray-900/75 backdrop-blur-sm" />
-          </Transition.Child>
+      {/* Main */}
+      <div className="dc-main">
+        <div className="dc-topbar">
+          <Users className="w-5 h-5" style={{ color: 'var(--dc-text-muted)' }} />
+          <span>Friends</span>
+          <div style={{ height: '24px', width: '1px', background: 'var(--dc-border)', margin: '0 8px' }} />
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)} className="dc-tab" style={{ background: activeTab === t.id ? 'var(--dc-bg-active)' : 'transparent', color: activeTab === t.id ? 'var(--dc-text-white)' : 'var(--dc-text-muted)', border: 'none', cursor: 'pointer', padding: '4px 12px', borderRadius: '4px', fontSize: '14px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              {t.label}{t.badge ? <span className="dc-badge">{t.badge}</span> : null}
+            </button>
+          ))}
+        </div>
 
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 sm:p-8 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg font-bold text-gray-900 flex items-center gap-2"
-                  >
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
-                    Remove Friend
-                  </Dialog.Title>
-                  <button
-                    onClick={closeModal}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                  <div className="mt-4">
-                    <p className="text-sm text-gray-500">
-                      Are you sure you want to remove{" "}
-                      <strong className="text-gray-700">
-                        {friendToRemove?.username}
-                      </strong>{" "}
-                      from your friends list?
-                    </p>
-                  </div>
-
-                  <div className="mt-6 flex justify-end gap-3">
-                    <button
-                      type="button"
-                      className="px-4 py-2 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                      onClick={closeModal}
-                    >
-                      Cancel
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+          {isLoading ? (
+            <div className="flex justify-center items-center h-32"><Loader2 className="w-8 h-8 animate-spin" style={{ color: 'var(--dc-accent)' }} /></div>
+          ) : activeTab === 'all' ? (
+            friends.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--dc-text-muted)', paddingTop: '60px' }}>
+                <Users className="w-16 h-16 mx-auto mb-4" style={{ color: 'var(--dc-bg-active)' }} />
+                <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--dc-text-normal)' }}>No friends yet</p>
+                <p style={{ fontSize: '14px', marginTop: '8px' }}>Add a friend to get started.</p>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--dc-text-muted)', marginBottom: '8px' }}>All Friends — {friends.length}</p>
+                {friends.map(f => (
+                  <div key={f._id} className="dc-user-row" style={{ justifyContent: 'space-between', borderRadius: '8px' }}>
+                    <button onClick={() => { setSelectedUserId(f._id); setIsInfoModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', flex: 1 }}>
+                      <img src={f.avatarUrl || DEFAULT_AVATAR} alt="" className="dc-avatar" onError={e => (e.currentTarget.src = DEFAULT_AVATAR)} />
+                      <div>
+                        <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dc-text-white)' }}>{f.name || f.username}</div>
+                        <div style={{ fontSize: '13px', color: 'var(--dc-text-muted)' }}>@{f.username}</div>
+                      </div>
                     </button>
-                    <button
-                      type="button"
-                      className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:bg-red-400"
-                      onClick={handleRemoveFriend}
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        "Remove"
-                      )}
+                    <button onClick={e => { e.stopPropagation(); setFriendToRemove(f); setIsModalOpen(true); }} className="dc-btn dc-btn-ghost" style={{ padding: '8px', borderRadius: '50%', color: 'var(--dc-danger)' }}>
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                </Dialog.Panel>
-              </Transition.Child>
+                ))}
+              </div>
+            )
+          ) : activeTab === 'pending' ? (
+            receivedRequests.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--dc-text-muted)', paddingTop: '60px' }}>
+                <Mail className="w-16 h-16 mx-auto mb-4" style={{ color: 'var(--dc-bg-active)' }} />
+                <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--dc-text-normal)' }}>No pending requests</p>
+              </div>
+            ) : (
+              <div>
+                <p style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--dc-text-muted)', marginBottom: '8px' }}>Pending — {receivedRequests.length}</p>
+                {receivedRequests.map(r => (
+                  <div key={r._id} className="dc-user-row" style={{ justifyContent: 'space-between', borderRadius: '8px' }}>
+                    <button onClick={() => { setSelectedUserId(r._id); setIsInfoModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', flex: 1 }}>
+                      <img src={r.avatarUrl || DEFAULT_AVATAR} alt="" className="dc-avatar" onError={e => (e.currentTarget.src = DEFAULT_AVATAR)} />
+                      <div>
+                        <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dc-text-white)' }}>{r.name || r.username}</div>
+                        <div style={{ fontSize: '13px', color: 'var(--dc-text-muted)' }}>Incoming Friend Request</div>
+                      </div>
+                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button onClick={() => handleAcceptRequest(r._id)} className="dc-btn" style={{ padding: '8px', borderRadius: '50%', background: 'var(--dc-bg-active)', color: 'var(--dc-success)' }} title="Accept"><UserCheck className="w-4 h-4" /></button>
+                      <button onClick={() => handleRejectRequest(r._id)} className="dc-btn" style={{ padding: '8px', borderRadius: '50%', background: 'var(--dc-bg-active)', color: 'var(--dc-danger)' }} title="Reject"><UserX className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          ) : (
+            <div style={{ maxWidth: '480px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--dc-text-white)', marginBottom: '4px' }}>Add Friend</h3>
+              <p style={{ fontSize: '14px', color: 'var(--dc-text-muted)', marginBottom: '16px' }}>You can add friends with their Chatterbox username.</p>
+              <form onSubmit={handleSendRequest} style={{ display: 'flex', gap: '8px', background: 'var(--dc-bg-tertiary)', borderRadius: '8px', padding: '4px', border: '1px solid var(--dc-border)' }}>
+                <input value={addUsername} onChange={e => setAddUsername(e.target.value)} placeholder="Enter a username" className="dc-input" style={{ background: 'transparent', flex: 1, border: 'none', boxShadow: 'none' }} />
+                <button type="submit" disabled={isSubmitting} className="dc-btn dc-btn-primary" style={{ flexShrink: 0 }}>
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Request'}
+                </button>
+              </form>
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Remove Modal */}
+      <Transition appear show={isModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsModalOpen(false)}>
+          <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)' }} />
+          </Transition.Child>
+          <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-150" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+              <Dialog.Panel className="dc-modal" style={{ maxWidth: '420px', width: '100%' }}>
+                <button onClick={() => setIsModalOpen(false)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-muted)' }}><X className="w-5 h-5" /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <AlertTriangle className="w-6 h-6" style={{ color: 'var(--dc-danger)', flexShrink: 0 }} />
+                  <Dialog.Title style={{ fontSize: '18px', fontWeight: 700, color: 'var(--dc-text-white)' }}>Remove Friend</Dialog.Title>
+                </div>
+                <p style={{ color: 'var(--dc-text-muted)', fontSize: '14px', marginBottom: '20px' }}>Are you sure you want to remove <strong style={{ color: 'var(--dc-text-normal)' }}>{friendToRemove?.username}</strong>?</p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button onClick={() => setIsModalOpen(false)} className="dc-btn dc-btn-secondary">Cancel</button>
+                  <button onClick={handleRemoveFriend} disabled={isSubmitting} className="dc-btn dc-btn-danger">
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Remove'}
+                  </button>
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
           </div>
         </Dialog>
       </Transition>
 
-      {/* --- 6. ADD THE NEW INFO MODAL --- */}
-      <UserInfoModal
-        isOpen={isInfoModalOpen}
-        onClose={closeInfoModal}
-        userId={selectedUserId}
-        onStatusChange={() => {
-          fetchData(); // Refetch friend data when status changes (e.g., accept/reject)
-        }}
-      />
-    </>
+      <UserInfoModal isOpen={isInfoModalOpen} onClose={() => { setIsInfoModalOpen(false); setSelectedUserId(null); }} userId={selectedUserId} onStatusChange={fetchData} />
+    </div>
   );
 };
 

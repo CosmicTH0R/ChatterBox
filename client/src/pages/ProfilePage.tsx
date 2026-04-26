@@ -4,28 +4,15 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast, Toaster } from "react-hot-toast";
 import { Dialog, Transition } from "@headlessui/react";
-import {
-  MessageSquareText, User, Lock, Eye, EyeOff, Loader2,
-  Save, ArrowLeft, Mail, Camera, X,
-} from "lucide-react";
+import { MessageSquareText, User, Lock, Eye, EyeOff, Loader2, Save, ArrowLeft, Mail, Camera, X, ShieldCheck } from "lucide-react";
 
-// --- NEW: Cache-busting function ---
-// This appends a unique timestamp to a URL to bypass browser cache
-const addCacheBuster = (url: string) => {
-  if (!url) return "";
-  // Check if URL already has query params
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}_t=${new Date().getTime()}`;
-};
-
+const addCacheBuster = (url: string) => { if (!url) return ""; const sep = url.includes("?") ? "&" : "?"; return `${url}${sep}_t=${Date.now()}`; };
 
 const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
   const username = localStorage.getItem("username") || "User";
   const API_URL = import.meta.env.VITE_API_URL;
-
-  // (States are all the same)
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -41,477 +28,181 @@ const ProfilePage: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [showPasswords, setShowPasswords] = useState({ old: false, new: false, confirm: false });
 
-  // --- Data Fetching (UPDATED) ---
   useEffect(() => {
     const fetchUserProfile = async () => {
       setIsFetchingData(true);
       try {
-        const { data } = await axios.get(`${API_URL}/api/users/profile`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setName(data.name || "");
-        setEmail(data.email || "");
-        
-        // --- FIX 1: Add cache-buster on initial load ---
-        setAvatarUrl(addCacheBuster(data.avatarUrl || ""));
-
-      } catch (err) {
-        console.error("Failed to fetch profile", err);
-        toast.error("Could not load your profile data.");
-      } finally {
-        setIsFetchingData(false);
-      }
+        const { data } = await axios.get(`${API_URL}/api/users/profile`, { headers: { Authorization: `Bearer ${token}` } });
+        setName(data.name || ""); setEmail(data.email || ""); setAvatarUrl(addCacheBuster(data.avatarUrl || ""));
+      } catch { toast.error("Could not load profile."); }
+      finally { setIsFetchingData(false); }
     };
     fetchUserProfile();
   }, [token]);
 
-  // (Image Handlers are the same)
-  const handleImageClick = () => { fileInputRef.current?.click(); };
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
-    }
+    if (file) { setSelectedFile(file); setPreviewUrl(URL.createObjectURL(file)); }
   };
 
-  // --- Form Handlers (UPDATED) ---
   const handleProfileSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProfileLoading(true);
-    const toastId = toast.loading("Saving profile...");
-    let uploadedAvatarUrl = avatarUrl.split("?")[0]; // Get the "clean" URL without old timestamp
-
-    // --- 1. UPLOAD IMAGE (if a new one was selected) ---
+    e.preventDefault(); setProfileLoading(true);
+    const id = toast.loading("Saving profile...");
+    let uploadedAvatarUrl = avatarUrl.split("?")[0];
     if (selectedFile) {
-      toast.loading("Uploading image...", { id: toastId });
-      const formData = new FormData();
-      formData.append("avatar", selectedFile); 
-
-      try {
-        const { data } = await axios.post(
-          `${API_URL}/api/users/upload-avatar`,
-          formData,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'multipart/form-data',
-            },
-          }
-        );
-        uploadedAvatarUrl = data.url; // This is a "clean" URL
-        setSelectedFile(null);
-        setPreviewUrl(null); // Clear preview, so displayAvatar uses avatarUrl
-      } catch (err) {
-        console.error("Image upload error:", err);
-        toast.error("Image upload failed. Profile not saved.", { id: toastId });
-        setProfileLoading(false);
-        return;
-      }
+      toast.loading("Uploading image...", { id });
+      const fd = new FormData(); fd.append("avatar", selectedFile);
+      try { const { data } = await axios.post(`${API_URL}/api/users/upload-avatar`, fd, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } }); uploadedAvatarUrl = data.url; setSelectedFile(null); setPreviewUrl(null); }
+      catch { toast.error("Image upload failed.", { id }); setProfileLoading(false); return; }
     }
-
-    // --- 2. SAVE THE ENTIRE PROFILE ---
     try {
-      toast.loading("Saving profile details...", { id: toastId });
-      
-      const { data: savedUser } = await axios.put(
-        `${API_URL}/api/users/profile`,
-        { name, email, avatarUrl: uploadedAvatarUrl }, // Send the "clean" URL to save in DB
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      // --- 3. UPDATE STATE FROM "SOURCE OF TRUTH" (FIXED) ---
-      setName(savedUser.name);
-      setEmail(savedUser.email);
-      
-      // --- FIX 2: Add a NEW cache-buster to the saved URL ---
-      setAvatarUrl(addCacheBuster(savedUser.avatarUrl)); // This forces the <img> to reload
-
-      toast.success("Profile updated successfully!", { id: toastId });
-    } catch (err: any) {
-      toast.error(getErrorMessage(err, "Failed to update profile."), {
-        id: toastId,
-      });
-    } finally {
-      setProfileLoading(false);
-    }
+      const { data: saved } = await axios.put(`${API_URL}/api/users/profile`, { name, email, avatarUrl: uploadedAvatarUrl }, { headers: { Authorization: `Bearer ${token}` } });
+      setName(saved.name); setEmail(saved.email); setAvatarUrl(addCacheBuster(saved.avatarUrl));
+      toast.success("Profile updated!", { id });
+    } catch (err: any) { toast.error(getErrorMessage(err, "Failed to update."), { id }); }
+    finally { setProfileLoading(false); }
   };
 
-  // (Password Change Handler is the same)
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      toast.error("Please fill in all password fields."); return;
-    }
-    // Removed manual length check to let backend handle validation
-    if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match."); return;
-    }
-
+    if (!oldPassword || !newPassword || !confirmPassword) { toast.error("Fill all fields."); return; }
+    if (newPassword !== confirmPassword) { toast.error("Passwords don't match."); return; }
     setPasswordLoading(true);
-    const toastId = toast.loading("Updating password...");
+    const id = toast.loading("Updating password...");
     try {
-      await axios.post(
-        `${API_URL}/api/auth/update-password`,
-        { oldPassword, newPassword },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success("Password updated successfully!", { id: toastId });
-      setOldPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setIsPasswordModalOpen(false);
-    } catch (err: any) {
-      toast.error(getErrorMessage(err, "Failed to update password."), {
-        id: toastId,
-      });
-    } finally {
-      setPasswordLoading(false);
-    }
+      await axios.post(`${API_URL}/api/auth/update-password`, { oldPassword, newPassword }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("Password updated!", { id }); setOldPassword(""); setNewPassword(""); setConfirmPassword(""); setIsPasswordModalOpen(false);
+    } catch (err: any) { toast.error(getErrorMessage(err, "Failed."), { id }); }
+    finally { setPasswordLoading(false); }
   };
 
-  const toggleShowPassword = (field: "old" | "new" | "confirm") => {
-    setShowPasswords((prev) => ({ ...prev, [field]: !prev[field] }));
-  };
+  const displayAvatar = previewUrl || avatarUrl || "https://api.dicebear.com/7.x/bottts/svg";
 
-  // --- UPDATED: This logic now correctly chooses the right image ---
-  const displayAvatar =
-    previewUrl || avatarUrl || "https://api.dicebear.com/7.x/bottts/svg";
+  const inputStyle = { background: 'var(--dc-bg-tertiary)', borderRadius: '4px', border: 'none', padding: '10px 12px', color: 'var(--dc-text-normal)', width: '100%', fontSize: '15px', fontFamily: 'inherit', outline: 'none' };
+  const labelStyle = { fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.04em', color: 'var(--dc-text-muted)', marginBottom: '8px', display: 'block' };
 
-  // --- RENDER (No changes from here down) ---
   return (
     <>
-      <Toaster position="top-center" />
-      <div className="min-h-screen bg-gray-100 font-inter">
+      <Toaster position="top-center" toastOptions={{ style: { background: '#313338', color: '#DBDEE1', border: '1px solid #3F4147' } }} />
+      <div className="dc-page">
         {/* Header */}
-        <header className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <MessageSquareText className="w-8 h-8 text-indigo-600" />
-              <span className="text-2xl font-bold text-gray-900">
-                Chatterbox
-              </span>
-            </div>
-            <button
-              onClick={() => navigate("/lobby")}
-              className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-indigo-600"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Back to Lobby
-            </button>
-          </div>
+        <header style={{ height: '48px', borderBottom: '1px solid var(--dc-border-light)', background: 'var(--dc-bg-secondary)', display: 'flex', alignItems: 'center', padding: '0 20px', gap: '12px' }}>
+          <button onClick={() => navigate('/lobby')} className="dc-btn dc-btn-ghost" style={{ padding: '6px', borderRadius: '4px', gap: '6px', fontSize: '14px' }}>
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          <div style={{ height: '20px', width: '1px', background: 'var(--dc-border)' }} />
+          <MessageSquareText className="w-5 h-5" style={{ color: 'var(--dc-accent)' }} />
+          <span style={{ fontWeight: 700, color: 'var(--dc-text-white)', fontSize: '15px' }}>Chatterbox</span>
+          <span style={{ marginLeft: 'auto', fontWeight: 600, fontSize: '14px', color: 'var(--dc-text-muted)' }}>Account Settings</span>
         </header>
 
-        {/* Page Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">
-            Account Settings
-          </h1>
-
+        <div style={{ maxWidth: '740px', margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           {isFetchingData ? (
-            <div className="flex justify-center items-center h-64">
-              <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px' }}>
+              <Loader2 className="w-10 h-10 animate-spin" style={{ color: 'var(--dc-accent)' }} />
             </div>
           ) : (
-            <div className="space-y-10">
-              {/* --- SECTION 1: PROFILE INFORMATION --- */}
-              <form
-                onSubmit={handleProfileSave}
-                className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:items-center flex ">
-                  {/* Left Column: Avatar */}
-                  <div className="md:col-span-1 flex justify-center">
-
-                    <div
-                      className="relative w-32 h-32 cursor-pointer group"
-                      onClick={handleImageClick}
-                    >
-                      <img
-                        src={displayAvatar}
-                        alt="Avatar"
-                        className="w-32 h-32 rounded-full bg-gray-200 border-2 border-gray-300 object-cover"
-                        onError={(e) =>
-                          (e.currentTarget.src =
-                            "https://api.dicebear.com/7.x/bottts/svg")
-                        }
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-60 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Camera className="w-8 h-8" />
+            <>
+              {/* Profile Card */}
+              <div style={{ background: 'var(--dc-bg-secondary)', borderRadius: '8px', overflow: 'hidden' }}>
+                {/* Banner */}
+                <div style={{ height: '100px', background: 'linear-gradient(135deg, var(--dc-accent) 0%, #7983F5 100%)' }} />
+                <div style={{ padding: '0 24px 24px', position: 'relative' }}>
+                  {/* Avatar */}
+                  <div style={{ position: 'relative', display: 'inline-block', marginTop: '-36px', marginBottom: '12px' }}>
+                    <div onClick={() => fileInputRef.current?.click()} style={{ width: '72px', height: '72px', borderRadius: '50%', border: '4px solid var(--dc-bg-secondary)', overflow: 'hidden', cursor: 'pointer', position: 'relative' }} className="group">
+                      <img src={displayAvatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', background: 'var(--dc-bg-active)' }} onError={e => (e.currentTarget.src = 'https://api.dicebear.com/7.x/bottts/svg')} />
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'opacity 0.15s' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0'}>
+                        <Camera className="w-6 h-6 text-white" />
                       </div>
                     </div>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept="image/png, image/jpeg, image/gif"
-                    />
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/png, image/jpeg, image/gif" />
                   </div>
 
-                  {/* Right Column: Form Fields */}
-                  <div className="md:col-span-2 space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <form onSubmit={handleProfileSave}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                       <div>
-                        <label
-                          htmlFor="name"
-                          className="block text-sm font-semibold text-gray-700 mb-2"
-                        >
-                          Name
-                        </label>
-                        <div className="relative">
-                          <User className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
-                          <input
-                            id="name" type="text" placeholder="Your display name"
-                            value={name} onChange={(e) => setName(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </div>
+                        <label style={labelStyle}>Display Name</label>
+                        <input value={name} onChange={e => setName(e.target.value)} placeholder="Your display name" style={inputStyle} />
                       </div>
                       <div>
-                        <label
-                          htmlFor="username"
-                          className="block text-sm font-semibold text-gray-700 mb-2"
-                        >
-                          Username
-                        </label>
-                        <div className="relative">
-                          <User className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
-                          <input
-                            id="username" type="text" value={username}
-                            disabled
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed"
-                          />
-                        </div>
+                        <label style={labelStyle}>Username</label>
+                        <input value={username} disabled style={{ ...inputStyle, opacity: 0.5, cursor: 'not-allowed' }} />
                       </div>
                     </div>
-                    <div>
-                      <label
-                        htmlFor="email"
-                        className="block text-sm font-semibold text-gray-700 mb-2"
-                      >
-                        Email
-                      </label>
-                      <div className="relative">
-                        <Mail className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
-                        <input
-                          id="email" type="email" placeholder="your@email.com"
-                          value={email} onChange={(e) => setEmail(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
+                    <div style={{ marginBottom: '20px' }}>
+                      <label style={labelStyle}>Email</label>
+                      <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" style={inputStyle} />
                     </div>
-                  </div>
-                </div>
-
-                {/* Form Footer: Save Button */}
-                <div className="flex justify-end border-t border-gray-200 pt-6 mt-8">
-                  <button
-                    type="submit"
-                    disabled={profileLoading}
-                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
-                  >
-                    {profileLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Save className="w-5 h-5" />
-                    )}
-                    {profileLoading ? "Saving..." : "Save Profile"}
-                  </button>
-                </div>
-              </form>
-
-              {/* --- SECTION 2: SECURITY --- */}
-                <h1 className="text-3xl font-bold text-gray-900 mb-8">
-            Security
-          </h1>
-              <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-lg">
-                <div className="flex justify-between items-center ">
-                  <div>
-                    <h4 className="font-semibold text-gray-800">Password</h4>
-                    <p className="text-sm text-gray-500">
-                      Change your password.
-                    </p> 
-                    {/* ^--- THIS IS THE FIX ---^ */}
-                  </div>
-                  <button
-                    onClick={() => setIsPasswordModalOpen(true)}
-                    className="px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-gray-800 shadow-md hover:bg-gray-900 transition"
-                  >
-                    Change
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
-
-      {/* --- PASSWORD MODAL --- */}
-      <Transition appear show={isPasswordModalOpen} as={Fragment}>
-        <Dialog
-          as="div"
-          className="relative z-50 font-inter"
-          onClose={() => setIsPasswordModalOpen(false)}
-        >
-          {/* 1. The overlay */}
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-gray-900/75 backdrop-blur-sm" />
-          </Transition.Child>
-
-          {/* 2. The modal content */}
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 sm:p-8 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-2xl font-bold text-gray-900 mb-4"
-                  >
-                    Change Password
-                  </Dialog.Title>
-                  <button
-                    onClick={() => setIsPasswordModalOpen(false)}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-
-                  <form
-                    onSubmit={handlePasswordChange}
-                    className="space-y-6 mt-6"
-                  >
-                    {/* Old Password */}
-                    <div>
-                      <label
-                        htmlFor="oldPassword"
-                        className="block text-sm font-semibold text-gray-700 mb-2"
-                      >
-                        Old Password
-                      </label>
-                      <div className="relative">
-                        <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
-                        <input
-                          id="oldPassword"
-                          type={showPasswords.old ? "text" : "password"}
-                          placeholder="••••••••"
-                          value={oldPassword}
-                          onChange={(e) => setOldPassword(e.target.value)}
-                          required
-                          className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => toggleShowPassword("old")}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
-                        >
-                          {showPasswords.old ? (
-                            <EyeOff className="w-5 h-5" />
-                          ) : (
-                            <Eye className="w-5 h-5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    {/* New Password */}
-                    <div>
-                      <label
-                        htmlFor="newPassword"
-                        className="block text-sm font-semibold text-gray-700 mb-2"
-                      >
-                        New Password
-                      </label>
-                      <div className="relative">
-                        <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
-                        <input
-                          id="newPassword"
-                          type={showPasswords.new ? "text" : "password"}
-                          placeholder="New password (min. 6 chars)"
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          required
-                          className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => toggleShowPassword("new")}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
-                        >
-                          {showPasswords.new ? (
-                            <EyeOff className="w-5 h-5" />
-                          ) : (
-                            <Eye className="w-5 h-5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    {/* Confirm New Password */}
-                    <div>
-                      <label
-                        htmlFor="confirmPassword"
-                        className="block text-sm font-semibold text-gray-700 mb-2"
-                      >
-                        Confirm New Password
-                      </label>
-                      <div className="relative">
-                        <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-3.5" />
-                        <input
-                          id="confirmPassword"
-                          type={showPasswords.confirm ? "text" : "password"}
-                          placeholder="Confirm new password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          required
-                          className="w-full pl-10 pr-12 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => toggleShowPassword("confirm")}
-                          className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-indigo-600"
-                        >
-                          {showPasswords.confirm ? (
-                            <EyeOff className="w-5 h-5" />
-                          ) : (
-                            <Eye className="w-5 h-5" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    {/* Save Button */}
-                    <div className="pt-2">
-                      <button
-                        type="submit"
-                        disabled={passwordLoading}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg text-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
-                      >
-                        {passwordLoading ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <Save className="w-5 h-5" />
-                        )}
-                        {passwordLoading ? "Saving..." : "Save Password"}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--dc-border)', paddingTop: '16px' }}>
+                      <button type="submit" disabled={profileLoading} className="dc-btn dc-btn-primary" style={{ gap: '8px' }}>
+                        {profileLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        {profileLoading ? "Saving..." : "Save Changes"}
                       </button>
                     </div>
                   </form>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
+                </div>
+              </div>
+
+              {/* Security Card */}
+              <div style={{ background: 'var(--dc-bg-secondary)', borderRadius: '8px', padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--dc-border)', paddingBottom: '16px' }}>
+                  <ShieldCheck className="w-5 h-5" style={{ color: 'var(--dc-accent)' }} />
+                  <h2 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--dc-text-white)' }}>Security</h2>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--dc-text-normal)', marginBottom: '4px' }}>Password</div>
+                    <div style={{ fontSize: '13px', color: 'var(--dc-text-muted)' }}>Update your password to keep your account secure.</div>
+                  </div>
+                  <button onClick={() => setIsPasswordModalOpen(true)} className="dc-btn dc-btn-secondary" style={{ flexShrink: 0 }}>
+                    Change Password
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Password Modal */}
+      <Transition appear show={isPasswordModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsPasswordModalOpen(false)}>
+          <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)' }} />
+          </Transition.Child>
+          <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-150" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+              <Dialog.Panel className="dc-modal" style={{ maxWidth: '440px', width: '100%' }}>
+                <button onClick={() => setIsPasswordModalOpen(false)} style={{ position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-muted)' }}><X className="w-5 h-5" /></button>
+                <Dialog.Title style={{ fontSize: '20px', fontWeight: 700, color: 'var(--dc-text-white)', marginBottom: '20px' }}>Update Password</Dialog.Title>
+                <form onSubmit={handlePasswordChange} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {[
+                    { id: 'old', label: 'Current Password', val: oldPassword, set: setOldPassword, show: showPasswords.old, field: 'old' as const },
+                    { id: 'new', label: 'New Password', val: newPassword, set: setNewPassword, show: showPasswords.new, field: 'new' as const },
+                    { id: 'confirm', label: 'Confirm New Password', val: confirmPassword, set: setConfirmPassword, show: showPasswords.confirm, field: 'confirm' as const },
+                  ].map(f => (
+                    <div key={f.id}>
+                      <label style={labelStyle}>{f.label}</label>
+                      <div style={{ position: 'relative' }}>
+                        <Lock className="w-4 h-4" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--dc-text-faint)' }} />
+                        <input type={f.show ? 'text' : 'password'} value={f.val} onChange={e => f.set(e.target.value)} required style={{ ...inputStyle, paddingLeft: '36px', paddingRight: '40px' }} placeholder="••••••••" />
+                        <button type="button" onClick={() => setShowPasswords(p => ({ ...p, [f.field]: !p[f.field] }))} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-muted)', padding: 0 }}>
+                          {f.show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '8px' }}>
+                    <button type="button" onClick={() => setIsPasswordModalOpen(false)} className="dc-btn dc-btn-secondary">Cancel</button>
+                    <button type="submit" disabled={passwordLoading} className="dc-btn dc-btn-primary">
+                      {passwordLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {passwordLoading ? "Saving..." : "Save Password"}
+                    </button>
+                  </div>
+                </form>
+              </Dialog.Panel>
+            </Transition.Child>
           </div>
         </Dialog>
       </Transition>
