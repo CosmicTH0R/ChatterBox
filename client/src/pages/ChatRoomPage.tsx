@@ -21,6 +21,7 @@ import {
   ArrowDown,
   Camera,
   Mic,
+  Hash,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast, Toaster } from "react-hot-toast";
@@ -282,24 +283,38 @@ const ChatRoomPage: React.FC = () => {
   }, []);
 
   // --- SCROLL: Auto-Scroll (Smart Smooth Scroll) ---
-  useEffect(() => {
-    if (isInitialLoad) return; // Ignore on initial load
+  const initialScrollDone = useRef(false);
 
+  useEffect(() => {
     const container = chatContainerRef.current;
     if (container) {
-      // Check if user is near the bottom (200px threshold)
-      const isNearBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight < 200;
+      if (!initialScrollDone.current && messages.length > 0) {
+        container.scrollTop = container.scrollHeight;
+        // Small delay just in case DOM needs a tick to render images/content
+        setTimeout(() => {
+          if (chatContainerRef.current) {
+            chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          }
+        }, 50);
+        initialScrollDone.current = true;
+      } else if (initialScrollDone.current) {
+        // Check if user is near the bottom (200px threshold)
+        const isNearBottom =
+          container.scrollHeight - container.scrollTop - container.clientHeight < 200;
 
-      if (isNearBottom) {
-        // Only scroll smoothly if near the bottom
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        if (isNearBottom) {
+          // Only scroll smoothly if near the bottom
+          container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+        }
       }
     }
   }, [messages]);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = chatContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    }
   };
 
 
@@ -631,9 +646,12 @@ const ChatRoomPage: React.FC = () => {
     );
   };
 
+  const modalStyle = { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' };
+  const panelStyle = { background: 'var(--dc-bg-modal)', borderRadius: '8px', padding: '24px', width: '100%', maxWidth: '420px', position: 'relative' as const };
+
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
-      <Toaster position="top-center" />
+    <div className="dc-layout">
+      <Toaster position="top-center" toastOptions={{ style: { background: '#313338', color: '#DBDEE1', border: '1px solid #3F4147' } }} />
 
       {/* RENDER MODALS DIRECTLY (Original behavior restored) */}
       <UserInfoModal
@@ -845,509 +863,203 @@ const ChatRoomPage: React.FC = () => {
         </Dialog>
       </Transition>
       {/* END MODALS */}
-      
-      {/* The main Chat UI starts here */}
-      <div className="relative flex w-full max-w-7xl h-[90vh] bg-white rounded-2xl shadow-xl overflow-hidden">
-        {/* ... (Sidebar - UNCHANGED) ... */}
-        <div className="hidden md:flex flex-col w-48 border-r border-gray-200 p-4 bg-gray-50">
-          <h3 className="font-semibold text-gray-700 mb-2">Who's Online</h3>
-          <ul className="space-y-2">
-            {onlineUsers.map((user) => (
-              <li key={user._id} className="flex items-center gap-2 text-gray-900 truncate">
-                <span className="w-3 h-3 bg-green-500 rounded-full shrink-0" />
-                <button
-                  onClick={() => openInfoModal(user._id)}
-                  className="truncate hover:underline text-left"
-                  title={user.name || user.username}
-                >
-                  {user.name || user.username}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
 
-        {/* ... (Mobile Drawer - UNCHANGED) ... */}
-        {isUserListOpen && (
-          <div
-            onClick={() => setIsUserListOpen(false)}
-            className="absolute inset-0 bg-black/30 z-10 md:hidden"
-          />
-        )}
-        <div
-          className={`absolute top-0 right-0 h-full w-64 bg-gray-50 p-4 shadow-xl transition-transform duration-300 ease-in-out z-20 md:hidden ${
-            isUserListOpen ? "translate-x-0" : "translate-x-full"
-          }`}
-        >
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="font-semibold text-gray-700">Who's Online</h3>
-            <button
-              onClick={() => setIsUserListOpen(false)}
-              className="p-1 rounded-lg text-gray-600 hover:bg-gray-200"
-            >
-              <X className="w-5 h-5" />
+      {/* Discord-style chat layout */}
+      {/* Members sidebar */}
+      <div className="dc-sidebar">
+        <div className="dc-sidebar-header" style={{ flexShrink: 0 }}>
+          <button onClick={() => navigate('/lobby')} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-muted)', fontSize: '13px', fontWeight: 500, padding: 0 }}>
+            <ArrowLeft className="w-4 h-4" /> Back to Lobby
+          </button>
+        </div>
+        <div style={{ padding: '8px 0', flex: 1, overflowY: 'auto' }}>
+          <div style={{ padding: '16px 16px 4px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--dc-text-muted)' }}>
+            Online — {onlineUsers.length}
+          </div>
+          {onlineUsers.map(user => (
+            <button key={user._id} onClick={() => openInfoModal(user._id)} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', padding: '6px 8px 6px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: '4px', margin: '1px 0' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--dc-bg-hover)'}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
+              <div style={{ position: 'relative' }}>
+                <img src={user.avatarUrl || DEFAULT_AVATAR} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', background: 'var(--dc-bg-active)' }} onError={e => (e.currentTarget.src = DEFAULT_AVATAR)} />
+                <span style={{ position: 'absolute', bottom: 0, right: 0, width: '10px', height: '10px', background: 'var(--dc-online)', borderRadius: '50%', border: '2px solid var(--dc-bg-secondary)' }} />
+              </div>
+              <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--dc-text-normal)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name || user.username}</span>
             </button>
-          </div>
-          <ul className="space-y-2">
-            {onlineUsers.map((user) => (
-              <li key={user._id} className="flex items-center gap-2 text-gray-900 truncate">
-                <span className="w-3 h-3 bg-green-500 rounded-full shrink-0" />
-                <button
-                  onClick={() => openInfoModal(user._id)}
-                  className="truncate hover:underline text-left"
-                  title={user.name || user.username}
-                >
-                  {user.name || user.username}
-                </button>
-              </li>
-            ))}
-          </ul>
+          ))}
         </div>
+      </div>
 
-        {/* --- Main Chat --- */}
-        <div className="flex flex-col grow relative">
-
-          {/* ... (Header - UNCHANGED) ... */}
-          <div className="relative flex flex-col items-center p-4 border-b bg-white z-10">
-            <div className="flex items-center justify-between w-full">
-              <button
-                onClick={() => navigate("/lobby")}
-                className="flex items-center justify-center rounded-lg text-sm font-semibold text-gray-700 bg-white shadow-sm border border-gray-300 hover:bg-gray-50 transition p-2 md:px-4 md:py-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden md:inline md:ml-2">Back to Lobby</span>
-              </button>
-              <h2 className="text-xl font-bold text-gray-900">{roomName}</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsUserListOpen(true)}
-                  className="p-2 rounded-lg text-gray-700 hover:bg-gray-100 md:hidden"
-                >
-                  <Users className="w-5 h-5" />
-                </button>
-                <div className="hidden md:flex justify-end">
-                  {inviteCode && (
-                    <button
-                      onClick={copyInvite}
-                      title="Copy Invite Code"
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-indigo-600 bg-indigo-100 rounded-lg hover:bg-indigo-200 transition"
-                    >
-                      <Clipboard className="w-4 h-4" />
-                      <span>Copy Invite</span>
-                    </button>
-                  )}
-                </div>
-                <Menu as="div" className="relative inline-block text-left">
-                  <div>
-                    <Menu.Button className="p-2 rounded-lg text-gray-700 hover:bg-gray-100">
-                      <MoreVertical className="w-5 h-5" />
-                    </Menu.Button>
-                  </div>
-                  <Transition
-                    as={Fragment}
-                    enter="transition ease-out duration-100"
-                    enterFrom="transform opacity-0 scale-95"
-                    enterTo="transform opacity-100 scale-100"
-                    leave="transition ease-in duration-75"
-                    leaveFrom="transform opacity-100 scale-100"
-                    leaveTo="transform opacity-0 scale-95"
-                  >
-                    <Menu.Items className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-                      <div className="py-1">
-                        <Menu.Item>
-                          {({ active }) => (
-                            <button
-                              onClick={() => setIsUnsendMyModalOpen(true)}
-                              className={`${
-                                active ? 'bg-gray-100' : ''
-                              } group flex w-full items-center px-4 py-2 text-sm text-gray-700`}
-                            >
-                              <Trash2 className="mr-2 h-5 w-5" />
-                              Unsend all my messages
-                            </button>
-                          )}
-                        </Menu.Item>
-                        {isCreator && (
-                          <Menu.Item>
-                            {({ active }) => (
-                              <button
-                                onClick={() => setIsClearAllModalOpen(true)}
-                                className={`${
-                                  active ? 'bg-red-50' : ''
-                                } group flex w-full items-center px-4 py-2 text-sm text-red-700`}
-                              >
-                                <X className="mr-2 h-5 w-5" />
-                                Clear Chat History (Creator)
-                              </button>
-                            )}
-                          </Menu.Item>
-                        )}
-                      </div>
-                    </Menu.Items>
-                  </Transition>
-                </Menu>
-              </div>
+      {/* Main chat */}
+      <div className="dc-main">
+          {/* Topbar */}
+          <div className="dc-topbar" style={{ justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Hash className="w-5 h-5" style={{ color: 'var(--dc-text-muted)' }} />
+              <span>{roomName}</span>
+              {typingUsers.length > 0 && (
+                <span style={{ fontSize: '12px', color: 'var(--dc-text-muted)', fontWeight: 400 }}>
+                  {typingUsers[0]}{typingUsers.length > 1 ? ` +${typingUsers.length - 1}` : ''} is typing...
+                </span>
+              )}
             </div>
-            {typingUsers.length > 0 && (
-              <div className="absolute bottom-0 text-sm text-gray-500 mt-1">
-                {typingUsers.length === 1
-                  ? `${typingUsers[0]} is typing...`
-                  : typingUsers.length === 2
-                    ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
-                    : `${typingUsers[0]}, ${typingUsers[1]} and ${
-                        typingUsers.length - 2
-                      } others are typing...`}
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {inviteCode && (
+                <button onClick={copyInvite} className="dc-btn dc-btn-secondary" style={{ gap: '6px', fontSize: '13px', padding: '6px 12px' }}>
+                  <Clipboard className="w-4 h-4" /> Copy Invite
+                </button>
+              )}
+              <button onClick={() => setIsUserListOpen(!isUserListOpen)} className="dc-btn dc-btn-ghost" style={{ padding: '6px', borderRadius: '4px' }} title="Members">
+                <Users className="w-5 h-5" />
+              </button>
+              <Menu as="div" style={{ position: 'relative' }}>
+                <Menu.Button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '4px', color: 'var(--dc-text-muted)' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--dc-bg-hover)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
+                  <MoreVertical className="w-5 h-5" />
+                </Menu.Button>
+                <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
+                  <Menu.Items style={{ position: 'absolute', right: 0, top: '36px', width: '200px', background: 'var(--dc-bg-tertiary)', borderRadius: '4px', border: '1px solid var(--dc-border)', padding: '4px', zIndex: 20 }}>
+                    <Menu.Item>{({ active }) => (<button onClick={() => setIsUnsendMyModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', background: active ? 'var(--dc-bg-hover)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-normal)', fontSize: '14px', borderRadius: '2px' }}><Trash2 className="w-4 h-4" />Unsend my messages</button>)}</Menu.Item>
+                    {isCreator && <Menu.Item>{({ active }) => (<button onClick={() => setIsClearAllModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', background: active ? 'rgba(242,63,67,0.15)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-danger)', fontSize: '14px', borderRadius: '2px' }}><X className="w-4 h-4" />Clear Chat (Creator)</button>)}</Menu.Item>}
+                  </Menu.Items>
+                </Transition>
+              </Menu>
+            </div>
           </div>
 
-          {/* --- MESSAGES LOOP --- */}
-          <div
-            ref={chatContainerRef}
-            className="grow p-4 overflow-y-auto bg-gray-50 flex flex-col"
-          >
-            <div className="space-y-4 grow">
-              {messages.map((msg, index) => {
-                const isMine = msg.user.username === currentUser;
-                const isSystem = msg.user.username === "System";
+          {/* Messages */}
+          <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '2px', minHeight: 0 }}>
+            {messages.map((msg, index) => {
+              const isMine = msg.user.username === currentUser;
+              const isSystem = msg.user.username === 'System';
+              const previousMsg = messages[index - 1];
+              const shouldShowHeader = !previousMsg || previousMsg.user._id !== msg.user._id || previousMsg.isSystem;
+              const hasMedia = !!msg.fileUrl;
+              const isJumbo = msg.text && isEmojiOnly(msg.text) && !hasMedia;
 
-                const previousMsg = messages[index - 1];
-                const shouldShowNameAndAvatar = !previousMsg || previousMsg.user._id !== msg.user._id || previousMsg.isSystem;
+              if (isSystem) return (
+                <div key={msg._id} style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 12px', background: 'var(--dc-bg-secondary)', borderRadius: '99px', fontSize: '12px', color: 'var(--dc-text-muted)' }}>
+                    <Zap className="w-3 h-3" />{msg.text}
+                  </span>
+                </div>
+              );
 
-                const hasMedia = !!msg.fileUrl;
-                const isJumbo = msg.text && isEmojiOnly(msg.text) && !hasMedia;
-                const useSimpleLayout = !hasMedia && !isJumbo;
+              return (
+                <Menu as="div" key={msg._id} style={{ position: 'relative' }}>
+                  <div className="group" style={{ display: 'flex', gap: '16px', padding: '2px 16px', borderRadius: '4px', marginTop: shouldShowHeader ? '16px' : '0' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--dc-bg-hover)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
 
-                return (
-                  <Menu as="div" className="relative" key={msg._id}>
-                    <div
-                      className={`group flex gap-3 mb-2 ${
-                        isSystem
-                          ? "justify-center"
-                          : isMine
-                            ? "justify-end"
-                            : "justify-start"
-                      }`}
-                    >
-                      {!isMine && !isSystem && shouldShowNameAndAvatar && (
-                        <button
-                          type="button"
-                          onClick={() => openInfoModal(msg.user._id)}
-                        >
-                          <img
-                            src={msg.user.avatarUrl || DEFAULT_AVATAR}
-                            alt={msg.user.username}
-                            className="shrink-0 w-10 h-10 rounded-full bg-gray-200 object-cover cursor-pointer hover:opacity-80"
-                            onError={(e) =>
-                              (e.currentTarget.src = DEFAULT_AVATAR)
-                            }
-                          />
+                    <div style={{ width: '40px', flexShrink: 0 }}>
+                      {shouldShowHeader ? (
+                        <button onClick={() => openInfoModal(msg.user._id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                          <img src={msg.user.avatarUrl || DEFAULT_AVATAR} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', background: 'var(--dc-bg-active)' }} onError={e => (e.currentTarget.src = DEFAULT_AVATAR)} />
                         </button>
-                      )}
-                      {!isMine && !isSystem && !shouldShowNameAndAvatar && (
-                        <div className="w-10 h-10 shrink-0" />
-                      )}
-
-                      {isSystem ? (
-                        <span className="flex items-center gap-2 px-3 py-1 text-xs text-gray-500 bg-gray-200 rounded-full">
-                          <Zap className="w-3 h-3 text-gray-400" />
-                          {msg.text}
-                        </span>
                       ) : (
-                        <div
-                          className={`flex flex-col max-w-[70%] ${
-                            isMine ? "items-end" : "items-start"
-                          }`}
-                        >
-                          {shouldShowNameAndAvatar && (
-                            <button
-                              onClick={() => openInfoModal(msg.user._id)}
-                              className="text-sm font-bold text-gray-900 mb-1 hover:underline disabled:no-underline disabled:cursor-default"
-                              disabled={isMine}
-                            >
-                              {msg.user.name || msg.user.username}
-                            </button>
-                          )}
-
-                          <div className={`relative flex items-center ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
-
-                            {!isSystem && (isMine || isCreator) && (
-                              <Menu.Button className={`p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity ${isMine ? 'mr-2' : 'ml-2'}`}>
-                                <MoreVertical className="w-4 h-4" />
-                              </Menu.Button>
-                            )}
-
-                            <div
-                              className={`relative px-4 py-3 rounded-lg shadow-md border flex ${
-                                useSimpleLayout
-                                  ? "flex-row items-baseline"
-                                  : "flex-col"
-                              } ${
-                                isMine
-                                  ? "bg-indigo-600 text-white border-indigo-600"
-                                  : "bg-white text-gray-800 border-gray-200"
-                              } ${msg.isPending ? "opacity-70" : ""}`}
-                            >
-                              {hasMedia && (
-                                <div className="mb-2">{renderMedia(msg, isMine)}</div>
-                              )}
-                              {msg.text && (
-                                <p className={`
-                                  ${isJumbo ? 'text-4xl' : ''}
-                                  ${
-                                    useSimpleLayout
-                                      ? 'whitespace-pre-line break-all'
-                                      : 'whitespace-pre-line'
-                                  }
-                                `}>
-                                  {msg.text}
-                                </p>
-                              )}
-                              <span className={`text-xs shrink-0 ${
-                                isMine ? "text-indigo-200" : "text-gray-400"
-                                } ${
-                                  useSimpleLayout
-                                    ? "ml-2"
-                                    : "mt-1 self-end"
-                                }`}>
-                                {msg.isEdited && "(edited) "}
-                                {msg.isPending ? (
-                                  <Clock className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  format(new Date(msg.timestamp), "HH:mm")
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                        <span style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px', fontSize: '10px', color: 'var(--dc-text-faint)', opacity: 0 }} className="group-hover:opacity-100">
+                          {format(new Date(msg.timestamp), 'HH:mm')}
+                        </span>
                       )}
                     </div>
 
-                    {/* --- Message Menu Panel --- */}
-                    <Transition
-                      as={Fragment}
-                      enter="transition ease-out duration-100"
-                      enterFrom="transform opacity-0 scale-95"
-                      enterTo="transform opacity-100 scale-100"
-                      leave="transition ease-in duration-75"
-                      leaveFrom="transform opacity-100 scale-100"
-                      leaveTo="transform opacity-0 scale-95"
-                    >
-                      <Menu.Items
-                        className={`absolute z-10 w-32 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none ${
-                          isMine ? "right-0" : "left-14"
-                        } top-6`}
-                      >
-                        <div className="py-1">
-                          {isMine && (
-                            <Menu.Item>
-                              {({ active }) => (
-                                <button
-                                  onClick={() => openEditModal(msg)}
-                                  disabled={!msg.text && !!msg.fileUrl}
-                                  className={`${
-                                    active ? "bg-gray-100" : ""
-                                  } group flex w-full items-center px-4 py-2 text-sm text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed`}
-                                >
-                                  <Edit className="mr-2 h-4 w-4" />
-                                  Edit
-                                </button>
-                              )}
-                            </Menu.Item>
-                          )}
-                          {isMine && (
-                            <Menu.Item>
-                              {({ active }) => (
-                                <button
-                                  onClick={() => handleDeleteMessage(msg._id)}
-                                  className={`${
-                                    active ? "bg-red-50" : ""
-                                  } group flex w-full items-center px-4 py-2 text-sm text-red-700`}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Unsend
-                                </button>
-                              )}
-                            </Menu.Item>
-                          )}
-                          {/* --- CREATOR REMOVE BUTTON --- */}
-                          {isCreator && !isMine && (
-                            <Menu.Item>
-                              {({ active }) => (
-                                <button
-                                  onClick={() => handleDeleteMessage(msg._id)}
-                                  className={`${
-                                    active ? "bg-red-50" : ""
-                                  } group flex w-full items-center px-4 py-2 text-sm text-red-700`}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Remove (Creator)
-                                </button>
-                              )}
-                            </Menu.Item>
-                          )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {shouldShowHeader && (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
+                          <button onClick={() => openInfoModal(msg.user._id)} disabled={isMine} style={{ background: 'none', border: 'none', cursor: isMine ? 'default' : 'pointer', padding: 0, fontSize: '15px', fontWeight: 600, color: isMine ? 'var(--dc-accent-light)' : 'var(--dc-text-white)' }}>
+                            {msg.user.name || msg.user.username}
+                          </button>
+                          <span style={{ fontSize: '11px', color: 'var(--dc-text-faint)' }}>{format(new Date(msg.timestamp), 'dd/MM/yyyy HH:mm')}</span>
                         </div>
-                      </Menu.Items>
-                    </Transition>
-                  </Menu>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
+                      )}
+                      {hasMedia && <div style={{ marginBottom: msg.text ? '4px' : '0' }}>{renderMedia(msg, isMine)}</div>}
+                      {msg.text && (
+                        <p style={{ fontSize: isJumbo ? '40px' : '15px', color: 'var(--dc-text-normal)', lineHeight: 1.375, wordBreak: 'break-word', margin: 0 }}>
+                          {msg.text}
+                          {msg.isEdited && <span style={{ fontSize: '10px', color: 'var(--dc-text-faint)', marginLeft: '4px' }}>(edited)</span>}
+                        </p>
+                      )}
+                    </div>
+
+                    {(isMine || isCreator) && (
+                      <div style={{ flexShrink: 0, opacity: 0 }} className="group-hover:opacity-100">
+                        <Menu.Button style={{ background: 'var(--dc-bg-secondary)', border: '1px solid var(--dc-border)', borderRadius: '4px', cursor: 'pointer', padding: '4px 6px', color: 'var(--dc-text-muted)', display: 'flex' }}>
+                          <MoreVertical className="w-4 h-4" />
+                        </Menu.Button>
+                      </div>
+                    )}
+                  </div>
+
+                  <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
+                    <Menu.Items style={{ position: 'absolute', right: '48px', top: '4px', background: 'var(--dc-bg-tertiary)', border: '1px solid var(--dc-border)', borderRadius: '4px', padding: '4px', zIndex: 20, minWidth: '160px' }}>
+                      {isMine && <Menu.Item>{({ active }) => (<button onClick={() => openEditModal(msg)} disabled={!msg.text && !!msg.fileUrl} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '6px 10px', background: active ? 'var(--dc-bg-hover)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-normal)', fontSize: '14px', borderRadius: '2px' }}><Edit className="w-4 h-4" />Edit Message</button>)}</Menu.Item>}
+                      {isMine && <Menu.Item>{({ active }) => (<button onClick={() => handleDeleteMessage(msg._id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '6px 10px', background: active ? 'rgba(242,63,67,0.15)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-danger)', fontSize: '14px', borderRadius: '2px' }}><Trash2 className="w-4 h-4" />Unsend</button>)}</Menu.Item>}
+                      {isCreator && !isMine && <Menu.Item>{({ active }) => (<button onClick={() => handleDeleteMessage(msg._id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '6px 10px', background: active ? 'rgba(242,63,67,0.15)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-danger)', fontSize: '14px', borderRadius: '2px' }}><Trash2 className="w-4 h-4" />Remove (Creator)</button>)}</Menu.Item>}
+                    </Menu.Items>
+                  </Transition>
+                </Menu>
+              );
+            })}
+            <div ref={messagesEndRef} />
           </div>
 
-          {/* --- Scroll to Bottom Button --- */}
-          <Transition
-            show={showScrollToBottom}
-            as={Fragment}
-            enter="transition-opacity duration-200"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="transition-opacity duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <button
-              onClick={scrollToBottom}
-              className="absolute bottom-24 right-6 p-3 rounded-full bg-indigo-600 text-white shadow-lg hover:bg-indigo-700 focus:outline-none z-10"
-            >
+          {/* Scroll to bottom */}
+          <Transition show={showScrollToBottom} as={Fragment} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <button onClick={scrollToBottom} style={{ position: 'absolute', bottom: '80px', right: '280px', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--dc-bg-secondary)', border: '1px solid var(--dc-border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dc-text-normal)', zIndex: 10 }}>
               <ArrowDown className="w-5 h-5" />
             </button>
           </Transition>
 
-          {/* --- Message Input (File Preview + Camera/Mic) --- */}
-          <div className="p-4 bg-white border-t relative z-20">
+          {/* Input area */}
+          <div style={{ padding: '0 16px 16px', flexShrink: 0 }}>
+            {showEmojiPicker && <div style={{ position: 'absolute', bottom: '80px', left: '260px', zIndex: 20 }}><EmojiPicker onEmojiClick={onEmojiClick} autoFocusSearch={false} theme={Theme.DARK as any} /></div>}
 
-            {showEmojiPicker && (
-              <div className="absolute bottom-full mb-2 z-20">
-                <EmojiPicker
-                  onEmojiClick={onEmojiClick}
-                  autoFocusSearch={false}
-                  theme={Theme.LIGHT}
-                />
-              </div>
-            )}
-
-            {/* --- File Preview --- */}
             {fileToSend && (
-              <div className="relative p-2 mb-2 border border-gray-300 rounded-lg bg-gray-50 flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700 truncate">
-                  Ready to send: {fileToSend.fileName}
-                </span>
-                <button
-                  onClick={() => setFileToSend(null)}
-                  className="p-1 rounded-full hover:bg-gray-200 text-gray-500"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--dc-bg-secondary)', borderRadius: '4px 4px 0 0', padding: '8px 16px', borderBottom: '1px solid var(--dc-border)' }}>
+                <span style={{ fontSize: '14px', color: 'var(--dc-text-normal)' }}>📎 {fileToSend.fileName}</span>
+                <button onClick={() => setFileToSend(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-muted)', padding: '4px' }}><X className="w-4 h-4" /></button>
               </div>
             )}
 
-            <form onSubmit={sendMessage} className="flex gap-2 items-center">
+            <form onSubmit={sendMessage} style={{ display: 'flex', alignItems: 'center', background: 'var(--dc-bg-active)', borderRadius: '8px', padding: '0 4px 0 12px', gap: '4px' }}>
+              <input type="file" ref={fileInputCameraRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*" capture="environment" />
+              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,audio/*" />
 
-              {/* --- Hidden Inputs --- */}
-              <input
-                type="file"
-                ref={fileInputCameraRef}
-                onChange={handleFileSelect}
-                className="hidden"
-                accept="image/*,video/*"
-                capture="environment"
-              />
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                className="hidden"
-                accept="image/*,video/*,audio/*"
-              />
-
-              {/* Emoji Button */}
-              <button
-                type="button"
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
-                disabled={isRecording}
-              >
-                <Smile className="w-5 h-5" />
+              <button type="button" onClick={handleFileButtonClick} disabled={isUploading || isRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--dc-text-muted)', flexShrink: 0 }}>
+                {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
               </button>
-
-              {/* Paperclip Button */}
-              <button
-                type="button"
-                onClick={handleFileButtonClick}
-                disabled={isUploading || isRecording}
-                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
-              >
-                {isUploading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Paperclip className="w-5 h-5" />
-                )}
-              </button>
-
-              {/* --- Camera Button --- */}
-              <button
-                type="button"
-                onClick={handleCameraButtonClick}
-                disabled={isUploading || isRecording}
-                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
-              >
+              <button type="button" onClick={handleCameraButtonClick} disabled={isUploading || isRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--dc-text-muted)', flexShrink: 0 }}>
                 <Camera className="w-5 h-5" />
               </button>
 
-              {/* --- Text Input --- */}
-              <div className="grow relative">
+              <div style={{ flex: 1, position: 'relative' }}>
                 {isRecording && (
-                  <span className="absolute inset-0 flex items-center justify-start px-4 text-red-500 font-semibold pointer-events-none z-10 bg-gray-100 rounded-lg">
-                    <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse mr-2"></span>
-                    Recording...
+                  <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', paddingLeft: '8px', color: 'var(--dc-danger)', fontWeight: 600, fontSize: '14px', pointerEvents: 'none' }}>
+                    <span style={{ width: '8px', height: '8px', background: 'var(--dc-danger)', borderRadius: '50%', marginRight: '8px', animation: 'pulse 1s infinite' }} />Recording...
                   </span>
                 )}
-                <input
-                  type="text"
-                  placeholder={"Type a message..."}
-                  value={text}
-                  onChange={handleInputChange}
-                  disabled={isRecording}
-                  className={`grow w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                    isRecording ? 'opacity-0 disabled:bg-gray-100' : 'disabled:bg-gray-100'
-                  }`}
-                />
+                <input type="text" placeholder={`Message #${roomName}`} value={text} onChange={handleInputChange} disabled={isRecording} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: 'var(--dc-text-normal)', fontSize: '15px', padding: '12px 8px', fontFamily: 'inherit', opacity: isRecording ? 0 : 1 }} />
               </div>
 
-              {/* --- Conditional Send/Mic Button --- */}
+              <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} disabled={isRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--dc-text-muted)', flexShrink: 0 }}>
+                <Smile className="w-5 h-5" />
+              </button>
               {(text.trim().length > 0 || fileToSend) ? (
-                // SEND BUTTON
-                <button
-                  type="submit"
-                  disabled={isUploading || isRecording}
-                  className="p-3.5 rounded-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition disabled:bg-indigo-400"
-                >
+                <button type="submit" disabled={isUploading || isRecording} style={{ background: 'var(--dc-accent)', border: 'none', cursor: 'pointer', padding: '8px', borderRadius: '4px', color: 'white', flexShrink: 0, margin: '4px' }}>
                   <Send className="w-5 h-5" />
                 </button>
               ) : (
-                // MIC BUTTON
-                <button
-                  type="button"
-                  onClick={handleMicClick}
-                  disabled={isUploading}
-                  className={`p-3.5 rounded-lg font-semibold text-white shadow-md transition ${
-                    isRecording
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-indigo-600 hover:bg-indigo-700'
-                  }`}
-                >
+                <button type="button" onClick={handleMicClick} disabled={isUploading} style={{ background: isRecording ? 'var(--dc-danger)' : 'var(--dc-accent)', border: 'none', cursor: 'pointer', padding: '8px', borderRadius: '4px', color: 'white', flexShrink: 0, margin: '4px' }}>
                   <Mic className="w-5 h-5" />
                 </button>
               )}
             </form>
-
           </div>
         </div>
-      </div>
     </div>
   );
 };
 
 export default ChatRoomPage;
+

@@ -1,4 +1,490 @@
 @import "tailwindcss";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+
+/* ============================================================
+   CHATTERBOX — Discord-Style Design System
+   Aesthetic: Premium Dark Community UI
+   DFII: 13/15
+   ============================================================ */
+
+@layer base {
+  :root {
+    /* Backgrounds */
+    --dc-bg-primary: #313338;
+    /* Main chat area */
+    --dc-bg-secondary: #2B2D31;
+    /* Sidebar panels */
+    --dc-bg-tertiary: #1E1F22;
+    /* Deepest sidebar / server list */
+    --dc-bg-hover: #35373C;
+    /* Hover state */
+    --dc-bg-active: #404249;
+    /* Active/selected item */
+    --dc-bg-input: #1E1F22;
+    /* Input fields */
+    --dc-bg-modal: #313338;
+    /* Modals */
+
+    /* Accent — Blurple */
+    --dc-accent: #5865F2;
+    --dc-accent-hover: #4752C4;
+    --dc-accent-light: #8892F8;
+
+    /* Status colors */
+    --dc-success: #23A55A;
+    --dc-danger: #F23F43;
+    --dc-warning: #F0B232;
+    --dc-online: #23A55A;
+    --dc-idle: #F0B232;
+    --dc-offline: #80848E;
+
+    /* Text */
+    --dc-text-normal: #DBDEE1;
+    --dc-text-muted: #949BA4;
+    --dc-text-faint: #6D6F78;
+    --dc-text-white: #FFFFFF;
+    --dc-text-link: #00A8FC;
+
+    /* Borders */
+    --dc-border: #3F4147;
+    --dc-border-light: #232428;
+
+    /* Channel item */
+    --dc-channel-text: #949BA4;
+    --dc-channel-hover-bg: rgba(255, 255, 255, 0.06);
+    --dc-channel-active-bg: rgba(255, 255, 255, 0.10);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--dc-bg-primary);
+    color: var(--dc-text-normal);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.375;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--dc-bg-tertiary);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--dc-bg-hover);
+  }
+}
+
+@layer utilities {
+
+  /* ── Layout shells ── */
+  .dc-layout {
+    display: flex;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+    background-color: var(--dc-bg-primary);
+  }
+
+  /* Full-page scrollable layout for auth/profile pages */
+  .dc-page {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    overflow-y: auto;
+    background-color: var(--dc-bg-primary);
+  }
+
+  /* Server list (far-left icon column) */
+  .dc-server-list {
+    width: 72px;
+    min-width: 72px;
+    background-color: var(--dc-bg-tertiary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 8px;
+    overflow-y: auto;
+  }
+
+  /* Channel sidebar */
+  .dc-sidebar {
+    width: 240px;
+    min-width: 240px;
+    background-color: var(--dc-bg-secondary);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  @media (max-width: 768px) {
+    .dc-sidebar {
+      display: none;
+    }
+  }
+
+  .dc-sidebar-header {
+    height: 48px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--dc-text-white);
+    border-bottom: 1px solid var(--dc-border-light);
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background-color 0.1s;
+  }
+
+  .dc-sidebar-header:hover {
+    background-color: var(--dc-bg-hover);
+  }
+
+  .dc-sidebar-section-label {
+    padding: 16px 16px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--dc-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: default;
+  }
+
+  .dc-channel-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px 6px 16px;
+    margin: 1px 8px;
+    border-radius: 4px;
+    color: var(--dc-channel-text);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.1s, color 0.1s;
+    text-decoration: none;
+  }
+
+  .dc-channel-item:hover {
+    background-color: var(--dc-channel-hover-bg);
+    color: var(--dc-text-normal);
+  }
+
+  .dc-channel-item.active {
+    background-color: var(--dc-channel-active-bg);
+    color: var(--dc-text-white);
+    font-weight: 600;
+  }
+
+  .dc-channel-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    width: 4px;
+    height: 20px;
+    background-color: var(--dc-accent);
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* Main content */
+  .dc-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    background-color: var(--dc-bg-primary);
+  }
+
+  .dc-topbar {
+    height: 48px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--dc-border-light);
+    background-color: var(--dc-bg-primary);
+    flex-shrink: 0;
+    font-weight: 600;
+    color: var(--dc-text-white);
+  }
+
+  /* ── Buttons ── */
+  .dc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.17s, transform 0.1s;
+    text-decoration: none;
+  }
+
+  .dc-btn:active {
+    transform: scale(0.98);
+  }
+
+  .dc-btn-primary {
+    background-color: var(--dc-accent);
+    color: var(--dc-text-white);
+  }
+
+  .dc-btn-primary:hover {
+    background-color: var(--dc-accent-hover);
+  }
+
+  .dc-btn-secondary {
+    background-color: var(--dc-bg-active);
+    color: var(--dc-text-normal);
+  }
+
+  .dc-btn-secondary:hover {
+    background-color: var(--dc-bg-hover);
+  }
+
+  .dc-btn-danger {
+    background-color: var(--dc-danger);
+    color: var(--dc-text-white);
+  }
+
+  .dc-btn-danger:hover {
+    background-color: #D03035;
+  }
+
+  .dc-btn-ghost {
+    background-color: transparent;
+    color: var(--dc-text-muted);
+  }
+
+  .dc-btn-ghost:hover {
+    background-color: var(--dc-bg-hover);
+    color: var(--dc-text-normal);
+  }
+
+  /* ── Inputs ── */
+  .dc-input {
+    width: 100%;
+    background-color: var(--dc-bg-input);
+    color: var(--dc-text-normal);
+    border: none;
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
+
+  .dc-input:focus {
+    box-shadow: 0 0 0 2px var(--dc-accent);
+  }
+
+  .dc-input::placeholder {
+    color: var(--dc-text-faint);
+  }
+
+  .dc-input-field {
+    background-color: var(--dc-bg-input);
+    border-radius: 8px;
+    padding: 12px 16px;
+    width: 100%;
+  }
+
+  /* ── Cards / Panels ── */
+  .dc-card {
+    background-color: var(--dc-bg-secondary);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .dc-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .dc-modal {
+    background-color: var(--dc-bg-modal);
+    border-radius: 8px;
+    padding: 24px;
+    width: 100%;
+    max-width: 440px;
+    position: relative;
+  }
+
+  /* ── User row (friends / member list) ── */
+  .dc-user-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.1s;
+  }
+
+  .dc-user-row:hover {
+    background-color: var(--dc-bg-hover);
+  }
+
+  /* ── Avatar ── */
+  .dc-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: var(--dc-bg-active);
+    flex-shrink: 0;
+  }
+
+  .dc-avatar-sm {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: var(--dc-bg-active);
+    flex-shrink: 0;
+  }
+
+  /* ── Status dot ── */
+  .dc-status-online::after,
+  .dc-status-offline::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--dc-bg-secondary);
+  }
+
+  .dc-status-online::after {
+    background: var(--dc-online);
+  }
+
+  .dc-status-offline::after {
+    background: var(--dc-offline);
+  }
+
+  /* ── Tab nav ── */
+  .dc-tab {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--dc-text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.1s, color 0.1s;
+  }
+
+  .dc-tab:hover {
+    background-color: var(--dc-bg-hover);
+    color: var(--dc-text-normal);
+  }
+
+  .dc-tab.active {
+    background-color: var(--dc-bg-active);
+    color: var(--dc-text-white);
+  }
+
+  /* ── Divider ── */
+  .dc-divider {
+    height: 1px;
+    background-color: var(--dc-border-light);
+    margin: 8px 0;
+  }
+
+  /* ── Badge ── */
+  .dc-badge {
+    background-color: var(--dc-danger);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 99px;
+    padding: 1px 6px;
+    line-height: 1.4;
+    min-width: 18px;
+    text-align: center;
+  }
+
+  /* ── Server icon button ── */
+  .dc-server-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: var(--dc-bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-radius 0.15s, background-color 0.15s;
+    color: var(--dc-text-normal);
+    font-weight: 600;
+    font-size: 18px;
+    flex-shrink: 0;
+    text-decoration: none;
+  }
+
+  .dc-server-icon:hover {
+    border-radius: 30%;
+    background-color: var(--dc-accent);
+    color: white;
+  }
+
+  .dc-server-icon.active {
+    border-radius: 30%;
+    background-color: var(--dc-accent);
+    color: white;
+  }
+
+  /* ── User panel (bottom of sidebar) ── */
+  .dc-user-panel {
+    height: 52px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--dc-bg-tertiary);
+    flex-shrink: 0;
+    margin-top: auto;
+  }
+}
