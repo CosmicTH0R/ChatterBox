@@ -61,18 +61,12 @@ const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm" />
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md" />
         </Transition.Child>
 
         {/* Full-screen container to center the content */}
         <div className="fixed inset-0 overflow-y-auto">
           <div className="flex min-h-full w-full items-center justify-center p-4">
-            
-            {/* ################################################## */}
-            {/* ### THIS IS THE FIX ### */}
-            {/* The Transition.Child now has ONE child: Dialog.Panel */}
-            {/* ################################################## */}
-
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -82,23 +76,20 @@ const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              {/* Make sure the panel is set to relative */}
-              <Dialog.Panel className="relative w-auto h-auto max-w-[90vw] max-h-[90vh] flex items-center justify-center rounded-lg">
-                
-                {/* MOVED: The Close Button is now INSIDE the Dialog.Panel */}
+              <Dialog.Panel className="relative w-auto h-auto max-w-[95vw] max-h-[95vh] flex items-center justify-center rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black/40">
+                {/* Close Button */}
                 <button
                   onClick={onClose}
-                  className="absolute top-2 right-2 z-50 p-2 text-white/80 bg-black/50 rounded-full hover:text-white"
+                  className="absolute top-4 right-4 z-50 p-2 text-white/60 bg-black/40 hover:bg-black/60 hover:text-white rounded-full transition-all duration-200 backdrop-blur-sm"
                   aria-label="Close media viewer"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
 
                 {/* The media content */}
-                <div className="overflow-hidden rounded-lg">
+                <div className="w-full h-full">
                   {renderMediaContent()}
                 </div>
-
               </Dialog.Panel>
             </Transition.Child>
           </div>

@@ -466,9 +466,9 @@ const DirectMessagePage: React.FC = () => {
     }
 
     // Base classes for other media types (image/video link placeholders)
-    const baseClasses = "p-3 rounded-lg border flex items-center gap-2.5 cursor-pointer transition-colors w-full max-w-xs";
-    const otherClasses = `bg-white border-gray-200 text-gray-700 hover:bg-gray-50`;
-    const myClasses = `bg-indigo-500 border-indigo-400 text-white hover:bg-indigo-400`;
+    const baseClasses = "p-3 rounded-lg border flex items-center gap-3 cursor-pointer transition-all w-full max-w-xs shadow-sm active:scale-[0.98]";
+    const otherClasses = `bg-[var(--dc-bg-secondary)] border-[var(--dc-border)] text-[var(--dc-text-normal)] hover:bg-[var(--dc-bg-active)]`;
+    const myClasses = `bg-[var(--dc-accent)] border-[var(--dc-accent)] text-white hover:opacity-90 shadow-lg shadow-[var(--dc-accent)]/10`;
 
     if (fileType.startsWith("image")) {
       return (
@@ -476,8 +476,10 @@ const DirectMessagePage: React.FC = () => {
           onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
           className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
         >
-          <ImageIcon className="w-5 h-5 shrink-0" />
-          <span className="font-medium">Photo</span>
+          <div className={`p-2 rounded ${isMine ? 'bg-white/20' : 'bg-[var(--dc-bg-active)]'}`}>
+            <ImageIcon className="w-5 h-5 shrink-0" />
+          </div>
+          <span className="font-semibold text-sm">View Photo</span>
         </div>
       );
     }
@@ -488,13 +490,14 @@ const DirectMessagePage: React.FC = () => {
           onClick={() => openMediaModal(msg.fileUrl!, fileType!)}
           className={`${baseClasses} ${isMine ? myClasses : otherClasses}`}
         >
-          <VideoIcon className="w-5 h-5 shrink-0" />
-          <span className="font-medium">Video</span>
+          <div className={`p-2 rounded ${isMine ? 'bg-white/20' : 'bg-[var(--dc-bg-active)]'}`}>
+            <VideoIcon className="w-5 h-5 shrink-0" />
+          </div>
+          <span className="font-semibold text-sm">Play Video</span>
         </div>
       );
     }
 
-    // --- THIS IS THE CHANGE ---
     if (fileType.startsWith("audio")) {
       return (
         <CustomAudioPlayer
@@ -503,7 +506,6 @@ const DirectMessagePage: React.FC = () => {
         />
       );
     }
-    // --- END OF CHANGE ---
 
     // Default case for 'download' fileType or unrecognized formats
     return (
@@ -511,8 +513,9 @@ const DirectMessagePage: React.FC = () => {
         href={msg.fileUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={`font-medium ${isMine ? 'text-white underline' : 'text-indigo-600 underline'}`}
+        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-[var(--dc-bg-secondary)] text-[var(--dc-text-link)] hover:bg-[var(--dc-bg-active)]'}`}
       >
+        <Paperclip className="w-4 h-4" />
         Download File
       </a>
     );
@@ -617,7 +620,21 @@ const DirectMessagePage: React.FC = () => {
       setIsRecording(false);
     }
   }
+<<<<<<< Updated upstream
 };
+=======
+};  const modalStyle = { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' };
+  const panelStyle = { 
+    background: 'var(--dc-bg-tertiary)', 
+    borderRadius: '12px', 
+    padding: '24px', 
+    width: '100%', 
+    maxWidth: '420px', 
+    position: 'relative' as const,
+    border: '1px solid var(--dc-border)',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4)'
+  };
+>>>>>>> Stashed changes
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4 font-inter">
@@ -1086,6 +1103,7 @@ const DirectMessagePage: React.FC = () => {
           >
             <div className="fixed inset-0 bg-gray-900/75 backdrop-blur-sm" />
           </Transition.Child>
+<<<<<<< Updated upstream
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4">
               <Transition.Child
@@ -1122,6 +1140,47 @@ const DirectMessagePage: React.FC = () => {
                       <button
                         type="submit"
                         className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+=======
+          <div style={{ position: 'fixed', inset: 0, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', minHeight: '100%', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                <Dialog.Panel style={panelStyle}>
+                  <Dialog.Title as="h3" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--dc-text-white)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <Edit className="w-5 h-5" style={{ color: 'var(--dc-accent)' }} /> Edit Message
+                  </Dialog.Title>
+                  <form onSubmit={handleEditSubmit}>
+                    <textarea 
+                      value={editedText} 
+                      onChange={(e) => setEditedText(e.target.value)} 
+                      className="dc-input" 
+                      style={{ 
+                        height: '120px', 
+                        resize: 'none', 
+                        marginBottom: '16px',
+                        background: 'var(--dc-bg-primary)',
+                        border: '1px solid var(--dc-border)',
+                        color: 'var(--dc-text-normal)',
+                        width: '100%',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        outline: 'none'
+                      }} 
+                      autoFocus 
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                      <button 
+                        type="button" 
+                        onClick={closeEditModal} 
+                        style={{ padding: '8px 16px', borderRadius: '4px', border: 'none', background: 'transparent', color: 'var(--dc-text-normal)', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit" 
+                        className="dc-btn dc-btn-primary"
+                        disabled={!editedText.trim() && !messageToEdit?.fileUrl}
+                        style={{ opacity: (!editedText.trim() && !messageToEdit?.fileUrl) ? 0.5 : 1 }}
+>>>>>>> Stashed changes
                       >
                         Save Changes
                       </button>
@@ -1133,12 +1192,219 @@ const DirectMessagePage: React.FC = () => {
           </div>
         </Dialog>
       </Transition>
+<<<<<<< Updated upstream
       <MediaViewerModal
         isOpen={isMediaModalOpen}
         onClose={closeMediaModal}
         url={selectedMediaUrl}
         fileType={selectedMediaType}
       />
+=======
+
+      <MediaViewerModal isOpen={isMediaModalOpen} onClose={closeMediaModal} url={selectedMediaUrl} fileType={selectedMediaType} />
+
+      {/* Main Container */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+        
+        {/* Sidebar (Conversations Navigation / Profile Panel) */}
+        <div className="dc-sidebar">
+          <div className="dc-sidebar-header" onClick={() => navigate('/conversations')} style={{ cursor: 'pointer', gap: '8px' }}>
+            <ArrowLeft className="w-5 h-5" /> Back
+          </div>
+          
+          {friendInfo && (
+            <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div style={{ position: 'relative', marginBottom: '16px' }}>
+                <img src={friendInfo.avatarUrl || DEFAULT_AVATAR} alt="" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', background: 'var(--dc-bg-active)' }} onError={e => (e.currentTarget.src = DEFAULT_AVATAR)} />
+                <span style={{ position: 'absolute', bottom: 4, right: 4, width: '16px', height: '16px', background: isFriendOnline ? 'var(--dc-online)' : 'var(--dc-offline)', borderRadius: '50%', border: '3px solid var(--dc-bg-secondary)' }} />
+              </div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: 700, color: 'var(--dc-text-white)' }}>{friendInfo.name || friendInfo.username}</h3>
+              <p style={{ margin: 0, fontSize: '14px', color: 'var(--dc-text-muted)' }}>@{friendInfo.username}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Main Chat Area */}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0, background: 'var(--dc-bg-primary)' }}>
+          {/* Topbar */}
+          <div className="dc-topbar" style={{ justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '20px', color: 'var(--dc-text-muted)' }}>@</span>
+              <span style={{ fontWeight: 600 }}>{friendInfo ? (friendInfo.name || friendInfo.username) : "Loading..."}</span>
+              {isFriendTyping && (
+                <span style={{ fontSize: '12px', color: 'var(--dc-text-muted)', fontWeight: 400, marginLeft: '8px' }}>is typing...</span>
+              )}
+            </div>
+            
+            <Menu as="div" style={{ position: 'relative' }}>
+              <Menu.Button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '4px', color: 'var(--dc-text-muted)' }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--dc-bg-hover)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
+                <MoreVertical className="w-5 h-5" />
+              </Menu.Button>
+              <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
+                <Menu.Items style={{ position: 'absolute', right: 0, top: '36px', width: '200px', background: 'var(--dc-bg-tertiary)', borderRadius: '4px', border: '1px solid var(--dc-border)', padding: '4px', zIndex: 20 }}>
+                  <Menu.Item>{({ active }) => (<button onClick={() => setIsUnsendMyModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '8px 12px', background: active ? 'var(--dc-bg-hover)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-normal)', fontSize: '14px', borderRadius: '2px' }}><Trash2 className="w-4 h-4" />Unsend my messages</button>)}</Menu.Item>
+                </Menu.Items>
+              </Transition>
+            </Menu>
+          </div>
+
+          {/* Messages List */}
+          <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '2px', minHeight: 0 }}>
+            {messages.map((msg, index) => {
+              const isMine = msg.user.username === currentUser;
+              const isSystem = msg.user.username === 'System';
+              const previousMsg = messages[index - 1];
+              const shouldShowHeader = !previousMsg || previousMsg.user._id !== msg.user._id || previousMsg.isSystem;
+              const hasMedia = !!msg.fileUrl;
+              const isJumbo = msg.text && isEmojiOnly(msg.text) && !hasMedia;
+
+              if (isSystem) return (
+                <div key={msg._id} style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 12px', background: 'var(--dc-bg-secondary)', borderRadius: '99px', fontSize: '12px', color: 'var(--dc-text-muted)' }}>
+                    <Zap className="w-3 h-3" />{msg.text}
+                  </span>
+                </div>
+              );
+
+              return (
+                <Menu as="div" key={msg._id} style={{ position: 'relative' }}>
+                  <div className="group" style={{ display: 'flex', gap: '16px', padding: '2px 16px', borderRadius: '4px', marginTop: shouldShowHeader ? '16px' : '0' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--dc-bg-hover)'}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'none'}>
+                    
+                    <div style={{ width: '40px', flexShrink: 0 }}>
+                      {shouldShowHeader ? (
+                        <img src={msg.user.avatarUrl || DEFAULT_AVATAR} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', background: 'var(--dc-bg-active)' }} onError={e => (e.currentTarget.src = DEFAULT_AVATAR)} />
+                      ) : (
+                        <span style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px', fontSize: '10px', color: 'var(--dc-text-faint)', opacity: 0 }} className="group-hover:opacity-100">
+                          {format(new Date(msg.timestamp), 'HH:mm')}
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0, opacity: msg.isPending ? 0.6 : 1 }}>
+                      {shouldShowHeader && (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '2px' }}>
+                          <span style={{ fontWeight: 500, fontSize: '15px', color: 'var(--dc-text-normal)' }}>{msg.user.name || msg.user.username}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--dc-text-muted)' }}>{format(new Date(msg.timestamp), 'dd/MM/yyyy HH:mm')}</span>
+                        </div>
+                      )}
+
+                      {hasMedia && <div style={{ margin: '4px 0' }}>{renderMedia(msg, isMine)}</div>}
+
+                      {msg.text && (
+                        <div style={{ fontSize: isJumbo ? '48px' : '15px', color: 'var(--dc-text-normal)', lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {msg.text}
+                          {msg.isEdited && <span style={{ fontSize: '11px', color: 'var(--dc-text-faint)', marginLeft: '4px' }}>(edited)</span>}
+                        </div>
+                      )}
+                    </div>
+
+                    {isMine && !msg.isPending && (
+                      <div style={{ flexShrink: 0, opacity: 0.4 }} className="group-hover:opacity-100">
+                        <Menu.Button style={{ background: 'var(--dc-bg-secondary)', border: '1px solid var(--dc-border)', borderRadius: '4px', cursor: 'pointer', padding: '4px 6px', color: 'var(--dc-text-muted)', display: 'flex' }}>
+                          <MoreVertical className="w-4 h-4" />
+                        </Menu.Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {isMine && !msg.isPending && (
+                    <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
+                      <Menu.Items style={{ position: 'absolute', right: '16px', top: '16px', width: '160px', background: 'var(--dc-bg-tertiary)', borderRadius: '4px', border: '1px solid var(--dc-border)', padding: '4px', zIndex: 20 }}>
+                        <Menu.Item>{({ active }) => (<button onClick={() => openEditModal(msg)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '6px 8px', background: active ? 'var(--dc-bg-hover)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-normal)', fontSize: '13px', borderRadius: '2px' }}><Edit className="w-4 h-4" />Edit</button>)}</Menu.Item>
+                        <Menu.Item>{({ active }) => (<button onClick={() => handleDeleteMessage(msg._id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '6px 8px', background: active ? 'rgba(242,63,67,0.15)' : 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-danger)', fontSize: '13px', borderRadius: '2px' }}><Trash2 className="w-4 h-4" />Delete</button>)}</Menu.Item>
+                      </Menu.Items>
+                    </Transition>
+                  )}
+                </Menu>
+              );
+            })}
+            <div ref={messagesEndRef} style={{ height: 1 }} />
+          </div>
+
+          {/* New Messages Alert */}
+          <Transition show={showScrollToBottom} enter="transition-opacity duration-200" enterFrom="opacity-0" enterTo="opacity-100" leave="transition-opacity duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div style={{ position: 'absolute', bottom: '90px', right: '32px', zIndex: 10 }}>
+              <button onClick={scrollToBottom} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'var(--dc-bg-secondary)', border: '1px solid var(--dc-border)', borderRadius: '99px', color: 'var(--dc-text-normal)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }} onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--dc-bg-hover)'} onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'var(--dc-bg-secondary)'}>
+                <ArrowDown className="w-4 h-4" /> View recent messages
+              </button>
+            </div>
+          </Transition>
+
+          {/* Input area */}
+          <div style={{ padding: '0 16px 16px', flexShrink: 0 }}>
+            {showEmojiPicker && <div style={{ position: 'absolute', bottom: '80px', left: '260px', zIndex: 20 }}><EmojiPicker onEmojiClick={onEmojiClick} autoFocusSearch={false} theme={Theme.DARK as any} /></div>}
+
+            {fileToSend && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--dc-bg-secondary)', borderRadius: '4px 4px 0 0', padding: '8px 16px', borderBottom: '1px solid var(--dc-border)' }}>
+                <span style={{ fontSize: '14px', color: 'var(--dc-text-normal)' }}>📎 {fileToSend.fileName}</span>
+                <button onClick={() => setFileToSend(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dc-text-muted)', padding: '4px' }}><X className="w-4 h-4" /></button>
+              </div>
+            )}
+
+            <form onSubmit={sendMessage} style={{ display: 'flex', alignItems: 'center', background: 'var(--dc-bg-active)', borderRadius: '8px', padding: '0 4px 0 12px', gap: '4px' }}>
+              <input type="file" ref={fileInputCameraRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*" capture="environment" />
+              <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*,video/*,audio/*" />
+
+              <button type="button" onClick={handleFileButtonClick} disabled={isUploading || isRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--dc-text-muted)', flexShrink: 0 }}>
+                {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Paperclip className="w-5 h-5" />}
+              </button>
+              <button type="button" onClick={handleCameraButtonClick} disabled={isUploading || isRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--dc-text-muted)', flexShrink: 0 }}>
+                <Camera className="w-5 h-5" />
+              </button>
+
+              <div style={{ flex: 1, position: 'relative' }}>
+                {isRecording && (
+                  <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', paddingLeft: '8px', color: 'var(--dc-danger)', fontWeight: 600, fontSize: '14px', pointerEvents: 'none' }}>
+                    <span style={{ width: '8px', height: '8px', background: 'var(--dc-danger)', borderRadius: '50%', marginRight: '8px', animation: 'pulse 1s infinite' }} />Recording...
+                  </span>
+                )}
+                <input type="text" placeholder={`Message @${friendInfo ? (friendInfo.name || friendInfo.username) : "User"}`} value={text} onChange={handleInputChange} disabled={isRecording} style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: 'var(--dc-text-normal)', fontSize: '15px', padding: '12px 8px', fontFamily: 'inherit', opacity: isRecording ? 0 : 1 }} />
+              </div>
+
+              <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} disabled={isRecording} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', color: 'var(--dc-text-muted)', flexShrink: 0 }}>
+                <Smile className="w-5 h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleMicClick}
+                disabled={isUploading}
+                style={{ 
+                  background: isRecording ? 'var(--dc-danger)' : 'none', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  padding: '8px', 
+                  color: isRecording ? 'white' : 'var(--dc-text-muted)', 
+                  borderRadius: '4px', 
+                  flexShrink: 0 
+                }}
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+              <button
+                type="submit"
+                disabled={isUploading || isRecording || (!text.trim() && !fileToSend)}
+                style={{ 
+                  background: (text.trim() || fileToSend) ? 'var(--dc-accent)' : 'none', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  padding: '8px', 
+                  borderRadius: '4px', 
+                  color: (text.trim() || fileToSend) ? 'white' : 'var(--dc-text-faint)', 
+                  flexShrink: 0, 
+                  margin: '0 4px' 
+                }}
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+>>>>>>> Stashed changes
     </div>
   );
 };

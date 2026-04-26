@@ -149,9 +149,11 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({
   const renderActionButtons = () => {
     if (!status) return null;
 
+    const btnBase = "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded text-[14px] font-medium transition-all duration-200 active:scale-[0.98]";
+
     if (status.isSelf) {
       return (
-        <p className="text-sm text-center text-gray-500">This is you!</p>
+        <p className="text-xs text-center text-[var(--dc-text-muted)] italic">This is you!</p>
       );
     }
 
@@ -159,9 +161,9 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({
       return (
         <button
           onClick={handleSendMessage}
-          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-lg font-semibold text-white bg-indigo-600 shadow-md hover:bg-indigo-700 transition"
+          className={`${btnBase} text-white bg-[var(--dc-accent)] hover:bg-[var(--dc-accent-hover)] shadow-lg shadow-[var(--dc-accent)]/10`}
         >
-          <MessageSquare className="w-5 h-5" />
+          <MessageSquare className="w-4 h-4" />
           Send Message
         </button>
       );
@@ -171,9 +173,9 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({
       return (
         <button
           disabled
-          className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-lg font-semibold text-white bg-gray-400 cursor-not-allowed"
+          className={`${btnBase} text-[var(--dc-text-muted)] bg-[var(--dc-bg-active)] border border-[var(--dc-border)] cursor-not-allowed`}
         >
-          <Check className="w-5 h-5" />
+          <Check className="w-4 h-4" />
           Request Sent
         </button>
       );
@@ -181,22 +183,22 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({
 
     if (status.isRequestReceived) {
       return (
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-2">
           <button
             onClick={handleAcceptRequest}
             disabled={isSubmitting}
-            className="grow flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-lg font-semibold text-white bg-green-600 hover:bg-green-700 transition disabled:bg-green-400"
+            className={`${btnBase} text-white bg-[var(--dc-online)] hover:opacity-90 disabled:opacity-50`}
           >
-            <UserCheck className="w-5 h-5" />
-            Accept
+            <UserCheck className="w-4 h-4" />
+            Accept Request
           </button>
           <button
             onClick={handleRejectRequest}
             disabled={isSubmitting}
-            className="grow flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-lg font-semibold text-white bg-red-600 hover:bg-red-700 transition disabled:bg-red-400"
+            className={`${btnBase} text-[var(--dc-text-normal)] bg-[var(--dc-bg-secondary)] border border-[var(--dc-border)] hover:bg-[var(--dc-bg-active)] disabled:opacity-50`}
           >
-            <UserX className="w-5 h-5" />
-            Reject
+            <UserX className="w-4 h-4" />
+            Ignore
           </button>
         </div>
       );
@@ -207,12 +209,12 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({
       <button
         onClick={handleAddFriend}
         disabled={isSubmitting}
-        className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-lg font-semibold text-white bg-blue-600 shadow-md hover:bg-blue-700 transition disabled:bg-blue-400"
+        className={`${btnBase} text-white bg-[var(--dc-accent)] hover:bg-[var(--dc-accent-hover)] shadow-lg shadow-[var(--dc-accent)]/10 disabled:opacity-50`}
       >
         {isSubmitting ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
-          <UserPlus className="w-5 h-5" />
+          <UserPlus className="w-4 h-4" />
         )}
         {isSubmitting ? 'Sending...' : 'Add Friend'}
       </button>
@@ -232,7 +234,7 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <div className="fixed inset-0 bg-gray-900/75 backdrop-blur-sm" />
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" />
         </Transition.Child>
 
         {/* Modal Content */}
@@ -247,51 +249,64 @@ const UserInfoModal: React.FC<UserInfoModalProps> = ({
               leaveFrom="opacity-100 scale-100"
               leaveTo="opacity-0 scale-95"
             >
-              <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded-2xl bg-white p-6 sm:p-8 text-left align-middle shadow-xl transition-all">
+              <Dialog.Panel className="w-full max-w-sm transform overflow-hidden rounded-xl bg-[var(--dc-bg-tertiary)] text-left align-middle shadow-2xl transition-all border border-[var(--dc-border)]">
+                {/* Profile Banner */}
+                <div className="h-24 w-full bg-[var(--dc-accent)] opacity-80" />
+
                 <button
                   onClick={onClose}
-                  className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                  className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors z-10 p-1 bg-black/20 rounded-full"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
 
-                {isLoading ? (
-                  <div className="flex justify-center items-center h-48">
-                    <Loader2 className="w-12 h-12 animate-spin text-indigo-600" />
-                  </div>
-                ) : user ? (
-                  <>
-                    {/* User Info */}
-                    <div className="flex flex-col items-center mt-4">
-                      <img
-                        src={user.avatarUrl || DEFAULT_AVATAR}
-                        alt={user.username}
-                        className="w-24 h-24 rounded-full bg-gray-200 object-cover border-4 border-white shadow-lg"
-                        onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
-                      />
-                      <Dialog.Title
-                        as="h3"
-                        className="mt-4 text-2xl font-bold text-gray-900"
-                      >
-                        {user.name || user.username}
-                      </Dialog.Title>
-                      {user.name && (
-                        <p className="text-gray-500">@{user.username}</p>
-                      )}
+                <div className="px-6 pb-8">
+                  {isLoading ? (
+                    <div className="flex justify-center items-center h-48">
+                      <Loader2 className="w-10 h-10 animate-spin text-[var(--dc-accent)]" />
                     </div>
+                  ) : user ? (
+                    <>
+                      {/* Avatar & Info */}
+                      <div className="relative flex flex-col items-start -mt-12">
+                        <div className="relative">
+                          <img
+                            src={user.avatarUrl || DEFAULT_AVATAR}
+                            alt={user.username}
+                            className="w-24 h-24 rounded-full bg-[var(--dc-bg-active)] object-cover border-[6px] border-[var(--dc-bg-tertiary)] shadow-xl"
+                            onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
+                          />
+                          <span className="absolute bottom-1 right-1 w-6 h-6 bg-[var(--dc-online)] border-[4px] border-[var(--dc-bg-tertiary)] rounded-full" />
+                        </div>
+                        
+                        <div className="mt-4 w-full p-4 rounded-lg bg-[var(--dc-bg-primary)] border border-[var(--dc-border-light)]">
+                          <Dialog.Title
+                            as="h3"
+                            className="text-xl font-bold text-[var(--dc-text-white)]"
+                          >
+                            {user.name || user.username}
+                          </Dialog.Title>
+                          <p className="text-[var(--dc-text-muted)] text-sm font-medium">@{user.username}</p>
+                          
+                          <div className="mt-4 pt-4 border-t border-[var(--dc-border-light)]">
+                            <h4 className="text-[var(--dc-text-muted)] text-[11px] font-bold uppercase tracking-wider mb-2">Member Since</h4>
+                            <p className="text-[var(--dc-text-normal)] text-xs">Chatterbox Community Member</p>
+                          </div>
+                        </div>
+                      </div>
 
-                    {/* Action Buttons */}
-                    <div className="mt-8">{renderActionButtons()}</div>
-                  </>
-                ) : (
-                  // Error state (if loading fails, though useEffect handles most of this)
-                  <div className="flex flex-col items-center h-48 justify-center text-center">
-                    <AlertTriangle className="w-12 h-12 text-red-500" />
-                    <p className="mt-4 text-gray-600">
-                      Could not load user profile.
-                    </p>
-                  </div>
-                )}
+                      {/* Action Buttons */}
+                      <div className="mt-6">{renderActionButtons()}</div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center h-48 justify-center text-center">
+                      <AlertTriangle className="w-10 h-10 text-[var(--dc-danger)]" />
+                      <p className="mt-4 text-[var(--dc-text-normal)]">
+                        Could not load user profile.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </Dialog.Panel>
             </Transition.Child>
           </div>
